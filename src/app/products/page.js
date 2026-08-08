@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import ProductCard from '../../src/components/ProductCard';
+import ProductCard from '@/components/ProductCard';
 
 
 const ALL_PRODUCTS = [

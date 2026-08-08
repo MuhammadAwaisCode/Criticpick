@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 // Dono missing components ko import kiya gaya hai
-import TopNav from '../../src/components/TopNav';
-import SubNav from '../../src/components/SubNav';
+import TopNav from '@/components/TopNav';
+import SubNav from '@/components/SubNav';
 
 // ---------------------------------------------------------------------------
 // Static contact info — mirrors the "Get In Touch" panel from Contactus.html.

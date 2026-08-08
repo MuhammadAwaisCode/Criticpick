@@ -1,6 +1,6 @@
-import TopNav from '../../src/components/TopNav';
-import SubNav from '../../src/components/SubNav';
-import Footer from '../../src/components/Footer';
+import TopNav from '@/components/TopNav';
+import SubNav from '@/components/SubNav';
+import Footer from '@/components/Footer';
 
 export const metadata = {
   title: 'About Us',
