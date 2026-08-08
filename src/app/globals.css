@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+   CRITIPICK GLOBAL THEME
+   Deep Slate (#131921 / #232f3e) + Purple/Pink gradients
+   ========================================================= */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply antialiased text-gray-900;
+    background: linear-gradient(135deg, #f1e1e6 0%, #d1a3c7 50%, #7a6fb0 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------
+     Glassmorphism card — used for auth panels, profile cards,
+     seller-panel widgets, and content sections.
+  --------------------------------------------------------- */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+  }
+
+  /* Slightly denser variant for compact dashboard widgets (seller panel) */
+  .glass-card-dense {
+    background: rgba(255, 255, 255, 0.9);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  /* Dark glass variant, for use over the slate nav / footer */
+  .glass-card-dark {
+    background: rgba(19, 25, 33, 0.75);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* ---------------------------------------------------------
+     Dropdown / sub-dropdown hover reveal (top nav category menu)
+  --------------------------------------------------------- */
+  .dropdown:hover .dropdown-menu {
+    display: block !important;
+  }
+
+  .sub-dropdown:hover .sub-menu {
+    display: block !important;
+  }
+
+  /* ---------------------------------------------------------
+     Hero carousel
+  --------------------------------------------------------- */
+  .carousel-track {
+    display: flex;
+    transition: transform 0.6s cubic-bezier(0.77, 0, 0.18, 1);
+  }
+
+  .carousel-slide {
+    min-width: 100%;
+    position: relative;
+  }
+
+  /* ---------------------------------------------------------
+     Card hover interactions
+  --------------------------------------------------------- */
+  .product-card {
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+
+  .product-card:hover {
+    box-shadow: 0 8px 32px rgba(122, 111, 176, 0.22);
+    transform: translateY(-3px);
+  }
+
+  .cat-card {
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+
+  .cat-card:hover {
+    box-shadow: 0 6px 24px rgba(122, 111, 176, 0.25);
+    transform: translateY(-2px);
+  }
+
+  /* ---------------------------------------------------------
+     Deal badge pulse
+  --------------------------------------------------------- */
+  .deal-badge {
+    animation: badge-pulse 2s infinite;
+  }
+
+  @keyframes badge-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Staggered fade-in utility classes (product grids, lists)
+  --------------------------------------------------------- */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .fade-in-d1 {
+    animation: fade-in 0.5s ease forwards;
+    animation-delay: 0.05s;
+    opacity: 0;
+  }
+  .fade-in-d2 {
+    animation: fade-in 0.5s ease forwards;
+    animation-delay: 0.1s;
+    opacity: 0;
+  }
+  .fade-in-d3 {
+    animation: fade-in 0.5s ease forwards;
+    animation-delay: 0.15s;
+    opacity: 0;
+  }
+  .fade-in-d4 {
+    animation: fade-in 0.5s ease forwards;
+    animation-delay: 0.2s;
+    opacity: 0;
+  }
+  .fade-in-d5 {
+    animation: fade-in 0.5s ease forwards;
+    animation-delay: 0.25s;
+    opacity: 0;
+  }
+}
+
+@layer utilities {
+  /* ---------------------------------------------------------
+     Custom THIN scrollbar (default, site-wide)
+  --------------------------------------------------------- */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1e1e6;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #7a6fb0;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6a5f9e;
+  }
+
+  /* Firefox thin scrollbar fallback */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #7a6fb0 #f1e1e6;
+  }
+
+  /* ---------------------------------------------------------
+     Fully HIDDEN scrollbar — for carousels, chip rows,
+     horizontal filter bars, and dashboard tab strips
+  --------------------------------------------------------- */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* ---------------------------------------------------------
+     Reusable gradient text for headings / brand accents
+  --------------------------------------------------------- */
+  .text-brand-gradient {
+    background: linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}

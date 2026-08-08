@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fashion - Criticpick</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/dist/css/all.min.css">
+    <style>
+        .dropdown:hover .dropdown-menu { display: block; }
+        .sub-dropdown:hover .sub-menu { display: block; }
+        .product-card { transition: box-shadow 0.25s, transform 0.25s; }
+        .product-card:hover { box-shadow: 0 12px 40px rgba(122,111,176,0.28); transform: translateY(-5px); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1e1e6; }
+        ::-webkit-scrollbar-thumb { background: #7a6fb0; border-radius: 3px; }
+
+        /* Page load animation */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeInUp 0.5s ease forwards; }
+        .fade-in-delay-1 { animation: fadeInUp 0.5s 0.1s ease both; }
+        .fade-in-delay-2 { animation: fadeInUp 0.5s 0.2s ease both; }
+        .fade-in-delay-3 { animation: fadeInUp 0.5s 0.3s ease both; }
+        .fade-in-delay-4 { animation: fadeInUp 0.5s 0.4s ease both; }
+        .fade-in-delay-5 { animation: fadeInUp 0.5s 0.5s ease both; }
+
+        /* Filter sidebar */
+        .filter-chip { transition: all 0.2s; cursor: pointer; }
+        .filter-chip:hover, .filter-chip.active { background: #7c3aed; color: white; border-color: #7c3aed; }
+
+        /* Badge pulse */
+        @keyframes badge-pulse { 0%,100%{opacity:1} 50%{opacity:.65} }
+        .badge-pulse { animation: badge-pulse 2s infinite; }
+
+        /* Shimmer for new badge */
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+        .shimmer-badge {
+            background: linear-gradient(90deg, #7c3aed 25%, #ec4899 50%, #7c3aed 75%);
+            background-size: 200% auto;
+            animation: shimmer 2s linear infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Sort dropdown */
+        .sort-dropdown:hover .sort-menu { display: block; }
+
+        /* Hover overlay on card image */
+        .card-img-wrap { position: relative; overflow: hidden; }
+        .card-img-wrap img { transition: transform 0.4s ease; }
+        .card-img-wrap:hover img { transform: scale(1.07); }
+        .card-overlay { position: absolute; inset: 0; background: rgba(124,58,237,0.12); opacity: 0; transition: opacity 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .card-img-wrap:hover .card-overlay { opacity: 1; }
+
+        /* Breadcrumb */
+        .breadcrumb a { transition: color 0.2s; }
+        .breadcrumb a:hover { color: #7c3aed; }
+
+        /* Active filter tag */
+        .active-filter { background: linear-gradient(135deg, #7c3aed, #ec4899); }
+
+        /* Pagination */
+        .page-btn { transition: all 0.2s; }
+        .page-btn:hover, .page-btn.active { background: #7c3aed; color: white; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- ===== TOP NAV ===== -->
+<nav class="bg-[#131921] text-white p-2 flex items-center justify-between gap-4 sticky top-0 z-50">
+    <a href="../index.html" class="flex items-center px-2 border border-transparent hover:border-white p-1 cursor-pointer">
+        <span class="text-xl font-bold italic">Criticpick</span>
+    </a>
+    <div class="hidden md:flex flex-col border border-transparent hover:border-white p-1 cursor-pointer dropdown relative group">
+        <span class="text-xs text-gray-400">Deliver to</span>
+        <span class="text-sm font-bold"><i class="fas fa-location-dot mr-1"></i> Pakistan</span>
+    </div>
+    <div class="flex-grow flex h-10">
+        <div class="relative dropdown">
+            <button class="bg-gray-200 text-gray-700 text-sm h-full px-3 rounded-l border-r border-gray-300 flex items-center gap-1">
+                All <i class="fas fa-caret-down text-xs"></i>
+            </button>
+            <ul class="dropdown-menu hidden absolute top-full left-0 bg-white text-black py-2 w-56 shadow-2xl z-[100] border-t-2 border-purple-600">
+                <li class="px-4 py-2 hover:bg-purple-100 cursor-pointer" onclick="location.href='fashion.html'">Fashion</li>
+                <li class="px-4 py-2 hover:bg-purple-100 cursor-pointer" onclick="location.href='beauty.html'">Beauty & Personal Care</li>
+                <li class="px-4 py-2 hover:bg-purple-100 cursor-pointer" onclick="location.href='health.html'">Health & Household</li>
+                <li class="px-4 py-2 hover:bg-purple-100 cursor-pointer" onclick="location.href='beauty.html'">Cosmetics</li>
+                <li class="px-4 py-2 hover:bg-purple-100 cursor-pointer" onclick="location.href='home.html'">Home & Kitchen</li>
+                <li class="px-4 py-2 hover:bg-purple-100 cursor-pointer" onclick="location.href='electronics.html'">Electronics</li>
+            </ul>
+        </div>
+        <input type="text" class="flex-grow px-3 text-black outline-none focus:ring-2 focus:ring-purple-500" placeholder="Search Fashion...">
+        <button class="bg-purple-600 hover:bg-purple-700 text-white px-4 rounded-r transition">
+            <i class="fas fa-search"></i>
+        </button>
+    </div>
+    <div class="flex items-center gap-4">
+        <div class="dropdown relative border border-transparent hover:border-white p-1 cursor-pointer">
+            <span class="block text-xs text-gray-400">Hello, sign in</span>
+            <span class="text-sm font-bold flex items-center gap-1">Account & Lists <i class="fas fa-caret-down text-gray-400"></i></span>
+        </div>
+        <a href="#" class="text-sm font-bold border border-transparent hover:border-white p-2">
+            <i class="fas fa-shopping-cart text-xl"></i>
+            <span class="ml-1">Cart</span>
+        </a>
+    </div>
+</nav>
+
+<!-- ===== SUB NAV ===== -->
+<div class="bg-[#232f3e] text-white p-2 flex items-center justify-between px-4 text-sm">
+    <div class="flex items-center gap-4">
+        <a href="../index.html" class="border border-transparent hover:border-white px-2 py-1">← Home</a>
+        <a href="/index.html" class="border border-transparent hover:border-white px-2 py-1">Dashboard</a>
+        <a href="/Aboutus.html" class="border border-transparent hover:border-white px-2 py-1">About Us</a>
+        <a href="/Contactus.htm" class="border border-transparent hover:border-white px-2 py-1">Contact Us</a>
+    </div>
+    <div class="flex items-center border border-transparent hover:border-white px-2 py-1 cursor-pointer">
+        <div class="relative">
+            <span class="absolute -top-2 -right-2 bg-purple-600 text-[10px] rounded-full h-4 w-4 flex items-center justify-center font-bold">3</span>
+            <i class="fas fa-shopping-cart text-xl"></i>
+        </div>
+        <span class="ml-2 font-bold uppercase tracking-tight">Cart</span>
+    </div>
+</div>
+
+<!-- ===== CATEGORY HERO BANNER ===== -->
+<div class="fade-in" style="background: linear-gradient(120deg,#e8d5f0 0%,#c084d0 60%,#7c3aed 100%); height: 180px; display:flex; align-items:center; padding: 0 4rem; position:relative; overflow:hidden;">
+    <!-- Decorative circles -->
+    <div style="position:absolute;right:10%;top:-30px;width:220px;height:220px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
+    <div style="position:absolute;right:20%;bottom:-40px;width:150px;height:150px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
+    <div>
+        <div class="breadcrumb text-purple-200 text-xs mb-2">
+            <a href="../index.html" class="text-purple-200">Home</a>
+            <span class="mx-1">/</span>
+            <span class="text-white font-bold">Fashion</span>
+        </div>
+        <h1 class="text-4xl font-black text-white mb-2 drop-shadow">Fashion</h1>
+        <p class="text-purple-100 text-sm">Explore the latest trends — women, men, and kids fashion</p>
+        <div class="flex gap-2 mt-3">
+            <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full border border-white/30">Women</span>
+            <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full border border-white/30">Men</span>
+            <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full border border-white/30">Kids</span>
+            <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full border border-white/30">Sale</span>
+        </div>
+    </div>
+    <div class="hidden lg:flex gap-3 ml-auto">
+        <div class="bg-white/15 backdrop-blur rounded-2xl px-6 py-3 text-center border border-white/20">
+            <div class="text-2xl font-black text-white">2,400+</div>
+            <div class="text-purple-200 text-xs">Products</div>
+        </div>
+        <div class="bg-white/15 backdrop-blur rounded-2xl px-6 py-3 text-center border border-white/20">
+            <div class="text-2xl font-black text-yellow-200">Up to 60%</div>
+            <div class="text-purple-200 text-xs">Off Today</div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="bg-[linear-gradient(135deg,_#f1e1e6_0%,_#d1a3c7_50%,_#7a6fb0_100%)] min-h-screen">
+    <div class="max-w-screen-xl mx-auto px-4 py-6 flex gap-5">
+
+        <!-- ===== SIDEBAR FILTERS ===== -->
+        <aside class="hidden lg:block w-56 flex-shrink-0 fade-in-delay-1">
+            <!-- Filter box -->
+            <div class="bg-white/85 backdrop-blur rounded-2xl shadow-lg p-4 mb-4 sticky top-24">
+                <h3 class="font-black text-purple-900 text-sm mb-3 border-b border-purple-100 pb-2">
+                    <i class="fas fa-filter mr-1 text-purple-500"></i> Filters
+                </h3>
+
+                <!-- Category -->
+                <div class="mb-4">
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2">Category</p>
+                    <ul class="space-y-1 text-xs">
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer font-bold text-purple-700">
+                            <i class="fas fa-check-circle text-purple-500 text-[10px]"></i> All Fashion
+                        </li>
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer text-gray-700">
+                            <i class="far fa-circle text-gray-300 text-[10px]"></i> Women's Wear
+                        </li>
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer text-gray-700">
+                            <i class="far fa-circle text-gray-300 text-[10px]"></i> Men's Wear
+                        </li>
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer text-gray-700">
+                            <i class="far fa-circle text-gray-300 text-[10px]"></i> Kids Fashion
+                        </li>
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer text-gray-700">
+                            <i class="far fa-circle text-gray-300 text-[10px]"></i> Accessories
+                        </li>
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer text-gray-700">
+                            <i class="far fa-circle text-gray-300 text-[10px]"></i> Footwear
+                        </li>
+                        <li class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50 cursor-pointer text-gray-700">
+                            <i class="far fa-circle text-gray-300 text-[10px]"></i> Bags & Purses
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Price Range -->
+                <div class="mb-4">
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2">Price Range</p>
+                    <input type="range" min="0" max="50000" value="25000" class="w-full accent-purple-600 mb-2">
+                    <div class="flex justify-between text-xs text-gray-500">
+                        <span>Rs 0</span>
+                        <span class="font-bold text-purple-700">Rs 25,000</span>
+                        <span>Rs 50k+</span>
+                    </div>
+                    <div class="flex gap-1 mt-2">
+                        <input type="number" placeholder="Min" class="w-1/2 border border-purple-200 rounded px-2 py-1 text-xs outline-none focus:border-purple-500">
+                        <input type="number" placeholder="Max" class="w-1/2 border border-purple-200 rounded px-2 py-1 text-xs outline-none focus:border-purple-500">
+                    </div>
+                </div>
+
+                <!-- Brand -->
+                <div class="mb-4">
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2">Brand</p>
+                    <div class="space-y-1 text-xs">
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> Limelight
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> Khaadi
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> Sapphire
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> Outfitters
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> Beechtree
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Rating -->
+                <div class="mb-4">
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2">Customer Rating</p>
+                    <div class="space-y-1">
+                        <label class="flex items-center gap-2 cursor-pointer text-xs hover:text-purple-700">
+                            <input type="radio" name="rating" class="accent-purple-600">
+                            <span class="text-yellow-400">★★★★★</span> & up
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-xs hover:text-purple-700">
+                            <input type="radio" name="rating" class="accent-purple-600">
+                            <span class="text-yellow-400">★★★★</span>☆ & up
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-xs hover:text-purple-700">
+                            <input type="radio" name="rating" class="accent-purple-600">
+                            <span class="text-yellow-400">★★★</span>☆☆ & up
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Discount -->
+                <div>
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-2">Discount</p>
+                    <div class="space-y-1 text-xs">
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> 10% or more
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> 25% or more
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:text-purple-700">
+                            <input type="checkbox" class="accent-purple-600"> 50% or more
+                        </label>
+                    </div>
+                </div>
+
+                <button class="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold py-2 rounded-xl text-xs hover:opacity-90 transition shadow">
+                    Apply Filters
+                </button>
+            </div>
+        </aside>
+
+        <!-- ===== PRODUCTS SECTION ===== -->
+        <div class="flex-grow">
+
+            <!-- Active Filters + Sort Bar -->
+            <div class="fade-in-delay-1 bg-white/80 backdrop-blur rounded-2xl shadow p-3 mb-4 flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs text-gray-500 font-bold">Active:</span>
+                    <span class="active-filter text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                        All Fashion <button onclick="this.parentElement.remove()" class="ml-1 hover:opacity-70"></button>
+                    </span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-gray-500">2,400 results</span>
+                    <div class="sort-dropdown relative">
+                        <button class="flex items-center gap-1 border border-purple-200 text-xs font-bold text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-50">
+                            Sort: Featured <i class="fas fa-caret-down text-[10px]"></i>
+                        </button>
+                        <ul class="sort-menu hidden absolute right-0 top-full bg-white shadow-xl rounded-xl border border-purple-100 w-44 py-1 z-20 text-xs">
+                            <li class="px-4 py-2 hover:bg-purple-50 cursor-pointer font-bold text-purple-700">Featured</li>
+                            <li class="px-4 py-2 hover:bg-purple-50 cursor-pointer">Price: Low to High</li>
+                            <li class="px-4 py-2 hover:bg-purple-50 cursor-pointer">Price: High to Low</li>
+                            <li class="px-4 py-2 hover:bg-purple-50 cursor-pointer">Newest Arrivals</li>
+                            <li class="px-4 py-2 hover:bg-purple-50 cursor-pointer">Avg. Customer Rating</li>
+                            <li class="px-4 py-2 hover:bg-purple-50 cursor-pointer">Best Sellers</li>
+                        </ul>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="setGrid(4)" class="p-1.5 rounded border border-purple-200 hover:bg-purple-50" title="Grid view">
+                            <i class="fas fa-th text-purple-600 text-xs"></i>
+                        </button>
+                        <button onclick="setGrid(2)" class="p-1.5 rounded border border-purple-200 hover:bg-purple-50" title="List view">
+                            <i class="fas fa-list text-purple-600 text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sub-category Chips -->
+            <div class="fade-in-delay-2 flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+                <button class="filter-chip active flex-shrink-0 border border-purple-300 text-xs font-bold px-4 py-1.5 rounded-full bg-purple-600 text-white">All</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Women's Dresses</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Men's Shirts</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Shalwar Kameez</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Jeans & Pants</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Kurtas</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Sarees</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Footwear</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Bags</button>
+                <button class="filter-chip flex-shrink-0 border border-purple-300 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full bg-white">Accessories</button>
+            </div>
+
+            <!-- Promo Banner -->
+            <div class="fade-in-delay-2 mb-4 rounded-2xl overflow-hidden" style="background:linear-gradient(120deg,#fce4ec 0%,#d1a3c7 60%,#9b59b6 100%); padding: 1.2rem 2rem; display:flex; align-items:center; justify-content:space-between;">
+                <div>
+                    <span class="badge-pulse inline-block bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded mb-1">Flash Sale</span>
+                    <h3 class="text-white font-black text-lg">Fashion Week Special — <span class="text-yellow-200">Up to 60% Off</span></h3>
+                    <p class="text-pink-100 text-xs">Limited time. Ends in: <span class="font-bold text-white" id="countdown">23:59:47</span></p>
+                </div>
+                <button class="bg-white text-purple-700 font-black px-5 py-2 rounded-full text-xs hover:bg-purple-50 shadow transition">Shop Sale</button>
+            </div>
+
+            <!-- Products Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="productsGrid">
+
+                <!-- Product Card 1 -->
+                <div class="product-card fade-in-delay-2 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/f3e8ff/7e22ce?text=+Dress" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50" title="Wishlist">
+                                <i class="far fa-heart text-sm"></i>
+                            </button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50" title="Quick View">
+                                <i class="fas fa-eye text-sm"></i>
+                            </button>
+                        </div>
+                        <span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">-35%</span>
+                        <span class="absolute top-2 right-2 bg-purple-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NEW</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Khaadi</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Embroidered Lawn Dress 3-Piece</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star-half-alt text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(312)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 3,899</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 5,999</span>
+                        </div>
+                        <div class="flex gap-1 mb-2">
+                            <span class="w-4 h-4 rounded-full bg-pink-400 border-2 border-white shadow cursor-pointer" title="Pink"></span>
+                            <span class="w-4 h-4 rounded-full bg-purple-400 border-2 border-white shadow cursor-pointer" title="Purple"></span>
+                            <span class="w-4 h-4 rounded-full bg-blue-300 border-2 border-white shadow cursor-pointer" title="Blue"></span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 2 -->
+                <div class="product-card fade-in-delay-2 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/fce4ec/9b59b6?text=+Heels" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                        <span class="absolute top-2 left-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">SALE</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Servis</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Stiletto Heels Collection</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="far fa-star text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(214)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 3,599</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 5,200</span>
+                        </div>
+                        <div class="flex gap-1 mb-2">
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">36</span>
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">37</span>
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">38</span>
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">39</span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 3 -->
+                <div class="product-card fade-in-delay-3 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/ede9fe/5b21b6?text=+Shirt" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                        <span class="absolute top-2 left-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">BESTSELLER</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Outfitters</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Men's Casual Slim-Fit Shirt</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(891)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 1,299</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 1,999</span>
+                        </div>
+                        <div class="flex gap-1 mb-2">
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">S</span>
+                            <span class="text-[9px] border border-purple-600 bg-purple-600 text-white px-1.5 py-0.5 rounded">M</span>
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">L</span>
+                            <span class="text-[9px] border border-purple-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-50">XL</span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 4 -->
+                <div class="product-card fade-in-delay-3 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/fdf2f8/a21caf?text=+Bag" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                        <span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">-50%</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Bagallery</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Premium Ladies Handbag</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star-half-alt text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(156)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 2,499</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 4,999</span>
+                        </div>
+                        <div class="flex gap-1 mb-2">
+                            <span class="w-4 h-4 rounded-full bg-gray-800 border-2 border-white shadow cursor-pointer"></span>
+                            <span class="w-4 h-4 rounded-full bg-amber-700 border-2 border-white shadow cursor-pointer"></span>
+                            <span class="w-4 h-4 rounded-full bg-rose-400 border-2 border-white shadow cursor-pointer"></span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 5 -->
+                <div class="product-card fade-in-delay-4 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/f3e8ff/7e22ce?text=+Kurta" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Sapphire</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Printed Cotton Kurta</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="far fa-star text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(423)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 1,850</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 2,500</span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 6 -->
+                <div class="product-card fade-in-delay-4 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/ede9fe/5b21b6?text=+Jeans" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                        <span class="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NEW</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Levi's PK</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Slim Fit Stretch Jeans</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(678)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 4,200</span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 7 -->
+                <div class="product-card fade-in-delay-5 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/fce4ec/c2185b?text=+Jewelry" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                        <span class="absolute top-2 left-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">TRENDING</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">Midas Touch</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Gold Plated Jewelry Set</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star-half-alt text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(98)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 8,999</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 12,000</span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Card 8 -->
+                <div class="product-card fade-in-delay-5 bg-white/90 backdrop-blur rounded-2xl overflow-hidden border border-purple-100 shadow-sm">
+                    <div class="card-img-wrap">
+                        <img src="https://placehold.co/260x200/f0fdf4/166534?text=+Jacket" class="w-full object-cover" style="height:160px;">
+                        <div class="card-overlay">
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="far fa-heart text-sm"></i></button>
+                            <button class="bg-white text-purple-700 rounded-full w-9 h-9 flex items-center justify-center shadow hover:bg-purple-50"><i class="fas fa-eye text-sm"></i></button>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-[10px] text-purple-500 font-bold uppercase mb-0.5">J. Junaid</p>
+                        <p class="text-xs font-bold text-gray-800 leading-snug mb-1.5">Men's Puffer Jacket</p>
+                        <div class="flex items-center gap-0.5 mb-1.5">
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="fas fa-star text-yellow-400 text-[9px]"></i><i class="fas fa-star text-yellow-400 text-[9px]"></i>
+                            <i class="far fa-star text-yellow-400 text-[9px]"></i>
+                            <span class="text-[9px] text-gray-400 ml-1">(302)</span>
+                        </div>
+                        <div class="flex items-center gap-1 mb-2">
+                            <span class="text-purple-700 font-black text-sm">Rs 6,500</span>
+                            <span class="text-gray-400 text-xs line-through">Rs 9,000</span>
+                        </div>
+                        <button class="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white text-[10px] font-bold py-1.5 rounded-xl transition hover:opacity-90 shadow-sm">
+                            <i class="fas fa-cart-plus mr-1"></i> Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+            </div><!-- /grid -->
+
+            <!-- Pagination -->
+            <div class="flex items-center justify-center gap-2 mt-8 pb-6">
+                <button class="page-btn border border-purple-200 text-purple-700 w-9 h-9 rounded-xl text-sm font-bold">←</button>
+                <button class="page-btn active border border-purple-600 bg-purple-600 text-white w-9 h-9 rounded-xl text-sm font-bold">1</button>
+                <button class="page-btn border border-purple-200 text-purple-700 w-9 h-9 rounded-xl text-sm font-bold">2</button>
+                <button class="page-btn border border-purple-200 text-purple-700 w-9 h-9 rounded-xl text-sm font-bold">3</button>
+                <span class="text-gray-400">...</span>
+                <button class="page-btn border border-purple-200 text-purple-700 w-9 h-9 rounded-xl text-sm font-bold">24</button>
+                <button class="page-btn border border-purple-200 text-purple-700 w-9 h-9 rounded-xl text-sm font-bold">→</button>
+            </div>
+
+        </div><!-- /products section -->
+    </div><!-- /flex container -->
+</main>
+
+<!-- Footer -->
+<footer class="bg-[#131921] text-gray-300 py-10 px-8 mt-0">
+    <div class="max-w-screen-xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
+        <div>
+            <h4 class="text-white font-black text-lg italic mb-3">Criticpick</h4>
+            <p class="text-gray-400 leading-relaxed">Turkish's trusted marketplace for quality products at the best prices.</p>
+        </div>
+        <div>
+            <h5 class="text-white font-bold mb-2">Shop</h5>
+            <ul class="space-y-1 text-gray-400">
+                <li><a href="fashion.html" class="hover:text-purple-400">Fashion</a></li>
+                <li><a href="beauty.html" class="hover:text-purple-400">Beauty</a></li>
+                <li><a href="electronics.html" class="hover:text-purple-400">Electronics</a></li>
+                <li><a href="home.html" class="hover:text-purple-400">Home & Kitchen</a></li>
+            </ul>
+        </div>
+        <div>
+            <h5 class="text-white font-bold mb-2">Account</h5>
+            <ul class="space-y-1 text-gray-400">
+                <li><a href="#" class="hover:text-purple-400">Sign In</a></li>
+                <li><a href="#" class="hover:text-purple-400">Orders</a></li>
+                <li><a href="#" class="hover:text-purple-400">Wishlist</a></li>
+            </ul>
+        </div>
+        <div>
+            <h5 class="text-white font-bold mb-2">Help</h5>
+            <ul class="space-y-1 text-gray-400">
+                <li><a href="/Contactus.html" class="hover:text-purple-400">Contact Us</a></li>
+                <li><a href="#" class="hover:text-purple-400">Returns</a></li>
+                <li><a href="#" class="hover:text-purple-400">Track Order</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="border-t border-gray-700 mt-6 pt-4 text-center text-[10px] text-gray-500">
+        © 2026 Criticpick. All rights reserved. Made in Pakistan.
+    </div>
+</footer>
+
+<script>
+// Countdown timer
+function updateCountdown() {
+    const el = document.getElementById('countdown');
+    if (!el) return;
+    let [h,m,s] = el.textContent.split(':').map(Number);
+    s--;
+    if (s < 0) { s = 59; m--; }
+    if (m < 0) { m = 59; h--; }
+    if (h < 0) { h = 23; m = 59; s = 59; }
+    el.textContent = [h,m,s].map(v => String(v).padStart(2,'0')).join(':');
+}
+setInterval(updateCountdown, 1000);
+
+// Filter chips
+document.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+    });
+});
+
+// Grid toggle
+function setGrid(cols) {
+    const grid = document.getElementById('productsGrid');
+    grid.className = grid.className.replace(/grid-cols-\d+/g, '');
+    grid.classList.add(`grid-cols-${cols === 2 ? '1' : '2'}`, `md:grid-cols-${cols === 2 ? '2' : '3'}`, `lg:grid-cols-${cols === 2 ? '2' : '4'}`);
+}
+</script>
+</body>
+</html>
