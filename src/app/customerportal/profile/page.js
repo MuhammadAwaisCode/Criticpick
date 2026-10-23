@@ -1,22 +1,77 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { FiPlus, FiStar, FiTrash2, FiMapPin, FiGlobe } from 'react-icons/fi';
 
 export default function ProfilePage() {
-  const [addresses, setAddresses] = useState([
-    { id: 1, name: 'Amara K.', countryLabel: 'United States', street: '482 Maple Avenue', city: 'Austin', state: 'TX', postal: '73301', phone: '+1 512 555 0198', isDefault: true },
-    { id: 2, name: 'Amara K. (Work)', countryLabel: 'United Arab Emirates', street: 'Al Wasl Road, Villa 12', city: 'Dubai', state: 'Dubai', postal: '', phone: '+971 50 123 4567', isDefault: false }
-  ]);
-  
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [addresses, setAddresses] = useState([]);
   const [currency, setCurrency] = useState('USD');
 
-  const handleSetDefault = (id) => {
-    setAddresses(addresses.map(addr => ({ ...addr, isDefault: addr.id === id })));
+  const fetchProfileData = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/signin/customer');
+      return;
+    }
+
+    const [addressesRes, profileRes] = await Promise.all([
+      supabase
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('display_currency')
+        .eq('id', user.id)
+        .single(),
+    ]);
+
+    if (addressesRes.data) {
+      setAddresses(addressesRes.data.map((a) => ({
+        id: a.id,
+        name: a.name,
+        countryLabel: a.country_label,
+        street: a.street,
+        city: a.city,
+        state: a.state,
+        postal: a.postal,
+        phone: a.phone,
+        isDefault: a.is_default,
+      })));
+    }
+
+    setCurrency(profileRes.data?.display_currency || 'USD');
+  }, [supabase, router]);
+
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]);
+
+  const handleCurrencyChange = async (value) => {
+    setCurrency(value);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('profiles').update({ display_currency: value }).eq('id', user.id);
   };
 
-  const handleDelete = (id) => {
-    setAddresses(addresses.filter(addr => addr.id !== id));
+  const handleSetDefault = async (id) => {
+    setAddresses((prev) => prev.map(addr => ({ ...addr, isDefault: addr.id === id })));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('addresses').update({ is_default: false }).eq('user_id', user.id);
+    await supabase.from('addresses').update({ is_default: true }).eq('id', id);
+  };
+
+  const handleDelete = async (id) => {
+    setAddresses((prev) => prev.filter(addr => addr.id !== id));
+    const { error } = await supabase.from('addresses').delete().eq('id', id);
+    if (error) fetchProfileData();
   };
 
   return (
@@ -33,7 +88,7 @@ export default function ProfilePage() {
             <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Display Currency</label>
             <select 
               value={currency} 
-              onChange={(e) => setCurrency(e.target.value)}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
               className="w-full sm:w-64 px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none bg-slate-50"
             >
               <option value="USD">🇺🇸 USD - US Dollar</option>

@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.112.0",
+    "@supabase/supabase-js": "^2.112.3",
     "libphonenumber-js": "^1.13.10",
-    "lucide-react": "^1.27.0",
+    "lucide-react": "^1.31.0",
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

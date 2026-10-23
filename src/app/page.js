@@ -1,14 +1,9 @@
 'use client';
-
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import ProductCard from '@/components/ProductCard';
-
-// ---------------------------------------------------------------------------
-// Static content — swap for API/CMS data once the backend is wired up.
-// ---------------------------------------------------------------------------
-
-const HERO_SLIDES = [
+import { createClient } from '@/lib/supabase/client';
+const FALLBACK_SLIDES = [
   {
     id: 1,
     gradient: 'linear-gradient(120deg,#e8d5f0 0%,#c084d0 60%,#7c3aed 100%)',
@@ -18,7 +13,7 @@ const HERO_SLIDES = [
     highlight: 'Latest',
     headingEnd: 'Trends Today',
     highlightColor: 'text-pink-200',
-    description: 'Exclusive deals across thousands of products. Fast delivery across Pakistan.',
+    description: 'Its Criticpcik hot selling products ',
     buttonLabel: 'Shop Now',
     buttonIcon: 'fa-arrow-right',
     buttonTextColor: 'text-purple-700',
@@ -43,130 +38,77 @@ const HERO_SLIDES = [
     image: 'https://placehold.co/400x260/fce4ec/c2185b?text=Flash+Sale',
     href: '/products?category=Beauty',
   },
-  {
+    {
     id: 3,
-    gradient: 'linear-gradient(120deg,#d1c4e9 0%,#a78bfa 60%,#4c1d95 100%)',
-    tag: 'Trending',
-    tagBg: 'bg-indigo-500',
-    headingStart: 'Home & Kitchen',
-    highlight: '',
-    headingEnd: 'Essentials',
-    highlightColor: 'text-purple-200',
-    description: 'Premium quality home products delivered to your doorstep.',
-    buttonLabel: 'Explore',
-    buttonIcon: 'fa-home',
-    buttonTextColor: 'text-indigo-700',
-    buttonHoverBg: 'hover:bg-indigo-50',
-    image: 'https://placehold.co/400x260/d1c4e9/4c1d95?text=Home+%26+Kitchen',
-    href: '/products?category=Home',
+    gradient: 'linear-gradient(120deg,#fce4ec 0%,#d1a3c7 60%,#9b59b6 100%)',
+    tag: 'Flash Sale',
+    tagBg: 'bg-pink-500',
+    headingStart: 'Up to',
+    highlight: '60% Off',
+    headingEnd: 'Beauty & Care',
+    highlightColor: 'text-yellow-200',
+    description: "Limited time offers on top beauty brands. Don't miss out!",
+    buttonLabel: 'Grab Deals',
+    buttonIcon: 'fa-bolt',
+    buttonTextColor: 'text-pink-600',
+    buttonHoverBg: 'hover:bg-pink-50',
+    image: 'https://placehold.co/400x260/fce4ec/c2185b?text=Flash+Sale',
+    href: '/products?category=Beauty',
   },
 ];
-
-const TODAYS_DEALS = [
-  {
-    id: 'deal-1',
-    name: 'Premium Handbag Collection',
-    image: 'https://placehold.co/120x100/f3e8ff/7e22ce?text=Handbag',
-    price: 2499,
-    originalPrice: 4499,
-    discount: 45,
-    claimed: 72,
-  },
-  {
-    id: 'deal-2',
-    name: 'Luxury Cosmetics Set',
-    image: 'https://placehold.co/120x100/fce4ec/9b59b6?text=Cosmetics',
-    price: 1799,
-    originalPrice: 2599,
-    discount: 30,
-    claimed: 55,
-  },
-];
-
-const WISHLIST_ITEMS = [
-  {
-    id: 'wish-1',
-    name: 'Summer Dress',
-    price: 3200,
-    image: 'https://placehold.co/40x40/f3e8ff/7e22ce?text=D',
-  },
-  {
-    id: 'wish-2',
-    name: 'Sport Sneakers',
-    price: 5499,
-    image: 'https://placehold.co/40x40/fce4ec/9b59b6?text=S',
-  },
-  {
-    id: 'wish-3',
-    name: 'Smart Watch',
-    price: 12000,
-    image: 'https://placehold.co/40x40/d1c4e9/4c1d95?text=W',
-  },
-];
-
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { name: 'Fashion', href: '/products?category=Fashion', image: 'https://placehold.co/48x48/ede9fe/5b21b6?text=👗' },
   { name: 'Beauty', href: '/products?category=Beauty', image: 'https://placehold.co/48x48/fce4ec/c2185b?text=💄' },
   { name: 'Electronics', href: '/products?category=Electronics', image: 'https://placehold.co/48x48/ddd6fe/4338ca?text=🎧' },
   { name: 'Books', href: '/products?category=Books', image: 'https://placehold.co/48x48/f3e8ff/7e22ce?text=📚' },
   { name: 'Home', href: '/products?category=Home', image: 'https://placehold.co/48x48/f1e1e6/7a6fb0?text=🏠' },
   { name: 'Sports', href: '/products?category=Sports', image: 'https://placehold.co/48x48/e8d5f0/7c3aed?text=🏀' },
-  { name: 'Health', href: '/products?category=Health', image: 'https://placehold.co/48x48/fde3ef/9b59b6?text=💊' },
-  { name: 'Kids', href: '/products?category=Kids', image: 'https://placehold.co/48x48/d1c4e9/4c1d95?text=🧸' },
 ];
-
-const FEATURED_PRODUCTS = [
-  { id: 'feat-1', name: 'Heels Collection', category: 'Fashion', price: 3599, rating: 4.5, reviewCount: 214, image: 'https://placehold.co/160x140/fce4ec/9b59b6?text=Heels' },
-  { id: 'feat-2', name: 'Gold Jewelry Set', category: 'Fashion', price: 8999, rating: 5, reviewCount: 98, image: 'https://placehold.co/160x140/fce4ec/c2185b?text=Jewelry' },
-  { id: 'feat-3', name: 'Designer Backpack', category: 'Fashion', price: 4200, rating: 4, reviewCount: 452, image: 'https://placehold.co/160x140/ede9fe/5b21b6?text=Backpack' },
-  { id: 'feat-4', name: 'Skincare Bundle', category: 'Beauty', price: 2100, rating: 4.5, reviewCount: 167, image: 'https://placehold.co/160x140/f3e8ff/7e22ce?text=Skincare' },
-  { id: 'feat-5', name: 'Smart Watch Pro', category: 'Electronics', price: 15999, rating: 5, reviewCount: 310, image: 'https://placehold.co/160x140/ddd6fe/4338ca?text=Watch' },
-  { id: 'feat-6', name: 'Running Shoes', category: 'Sports', price: 6499, rating: 4, reviewCount: 523, image: 'https://placehold.co/160x140/fce4ec/9b59b6?text=Shoes' },
+const FALLBACK_WISHLIST = [
+  { id: 'wish-1', name: 'Summer Dress', price: 3200, image: 'https://placehold.co/40x40/f3e8ff/7e22ce?text=D' },
+  { id: 'wish-2', name: 'Sport Sneakers', price: 5499, image: 'https://placehold.co/40x40/fce4ec/9b59b6?text=S' },
 ];
+function normalizeProduct(item) {
+  let image = 'https://placehold.co/400x400/f3e8ff/7e22ce?text=Product';
+  if (Array.isArray(item.images) && item.images.length > 0) {
+    image = item.images[0];
+  } else if (item.image_url) {
+    image = item.image_url;
+  } else if (item.image) {
+    image = item.image;
+  }
 
-const CLOTHING_BEST_SELLERS = [
-  { id: 'cloth-1', name: 'Oversized Denim Jacket', brand: 'UrbanFit', category: 'Fashion', price: 4999, originalPrice: 6999, rating: 4.5, reviewCount: 320, image: 'https://placehold.co/170x130/ede9fe/5b21b6?text=Jacket', badge: 'BESTSELLER' },
-  { id: 'cloth-2', name: 'Floral Wrap Dress', brand: 'Chic Lane', category: 'Fashion', price: 3200, rating: 4, reviewCount: 189, image: 'https://placehold.co/170x130/fce4ec/9b59b6?text=Dress' },
-  { id: 'cloth-3', name: 'Classic Fit Chinos', brand: 'Herringbone', category: 'Fashion', price: 2799, originalPrice: 3499, rating: 4.5, reviewCount: 271, image: 'https://placehold.co/170x130/f3e8ff/7e22ce?text=Chinos', badge: 'SALE' },
-  { id: 'cloth-4', name: 'Ribbed Knit Sweater', brand: 'Chic Lane', category: 'Fashion', price: 3599, rating: 4, reviewCount: 143, image: 'https://placehold.co/170x130/e8d5f0/7c3aed?text=Sweater' },
-  { id: 'cloth-5', name: 'Everyday Linen Shirt', brand: 'UrbanFit', category: 'Fashion', price: 2499, rating: 4.5, reviewCount: 402, image: 'https://placehold.co/170x130/d1c4e9/4c1d95?text=Shirt', badge: 'BESTSELLER' },
-  { id: 'cloth-6', name: 'High-Waist Trousers', brand: 'Herringbone', category: 'Fashion', price: 3100, originalPrice: 3900, rating: 4, reviewCount: 96, image: 'https://placehold.co/170x130/fde3ef/9b59b6?text=Trousers', badge: 'SALE' },
-  { id: 'cloth-7', name: 'Athleisure Jogger Set', brand: 'MoveWell', category: 'Fashion', price: 3799, rating: 4.5, reviewCount: 258, image: 'https://placehold.co/170x130/ddd6fe/4338ca?text=Joggers' },
-  { id: 'cloth-8', name: 'Tailored Blazer', brand: 'Herringbone', category: 'Fashion', price: 6999, rating: 5, reviewCount: 61, image: 'https://placehold.co/170x130/e8d5f0/7c3aed?text=Blazer', badge: 'NEW' },
-];
+  const price = Number(item.price) || 0;
+  const originalPrice = item.original_price
+    ? Number(item.original_price)
+    : item.originalPrice
+    ? Number(item.originalPrice)
+    : null;
+  const discount =
+    originalPrice && originalPrice > price
+      ? Math.round(((originalPrice - price) / originalPrice) * 100)
+      : item.discount || 0;
 
-const BEAUTY_POPULAR = [
-  { id: 'beauty-1', name: 'Matte Liquid Lipstick Set', brand: 'Huda Beauty', category: 'Beauty', price: 2399, originalPrice: 3999, rating: 5, reviewCount: 1204, image: 'https://placehold.co/170x130/fce4ec/9b59b6?text=Lipstick', badge: 'SALE' },
-  { id: 'beauty-2', name: 'Vitamin C Brightening Serum', brand: 'The Ordinary', category: 'Beauty', price: 1850, originalPrice: 2500, rating: 4, reviewCount: 876, image: 'https://placehold.co/170x130/f3e8ff/7e22ce?text=Serum', badge: 'NEW' },
-  { id: 'beauty-3', name: 'Hydrating Foundation', brand: 'Fenty Beauty', category: 'Beauty', price: 3299, rating: 4.5, reviewCount: 540, image: 'https://placehold.co/170x130/fdf2f8/a21caf?text=Foundation' },
-  { id: 'beauty-4', name: 'Rose Gold Eyeshadow Palette', brand: 'Huda Beauty', category: 'Beauty', price: 2899, rating: 4.5, reviewCount: 690, image: 'https://placehold.co/170x130/fce4ec/c2185b?text=Eyeshadow', badge: 'BESTSELLER' },
-  { id: 'beauty-5', name: 'Nourishing Hair Mask', brand: 'Kerastase', category: 'Beauty', price: 2100, originalPrice: 2600, rating: 4, reviewCount: 233, image: 'https://placehold.co/170x130/ede9fe/5b21b6?text=Hair+Mask', badge: 'SALE' },
-  { id: 'beauty-6', name: 'Luxury Perfume — Blossom', brand: 'Chanel', category: 'Beauty', price: 8999, rating: 5, reviewCount: 112, image: 'https://placehold.co/170x130/f3e8ff/7e22ce?text=Perfume' },
-  { id: 'beauty-7', name: 'SPF 50 Sunscreen Gel', brand: 'The Ordinary', category: 'Beauty', price: 1499, rating: 4.5, reviewCount: 998, image: 'https://placehold.co/170x130/fde3ef/9b59b6?text=Sunscreen' },
-  { id: 'beauty-8', name: 'Charcoal Face Wash', brand: 'Neutrogena', category: 'Beauty', price: 899, rating: 4, reviewCount: 344, image: 'https://placehold.co/170x130/ddd6fe/4338ca?text=Face+Wash' },
-];
+  return {
+    id: item.id,
+    name: item.title || item.name || 'Product Item',
+    title: item.title || item.name || 'Product Item',
+    price,
+    originalPrice,
+    discount,
+    claimed: item.claimed || Math.floor(Math.random() * 40) + 50,
+    rating: item.rating || 4.5,
+    reviewCount: item.review_count || item.reviewsCount || 100,
+    brand: item.brand || item.vendor || 'Verified Store',
+    category: item.category || 'General',
+    image,
+    status: item.in_stock === false ? 'Out of Stock' : 'In Stock',
+    statusColor: item.in_stock === false ? 'text-red-400' : 'text-green-500',
+    badge: item.badge || (discount > 0 ? 'SALE' : null),
+  };
+}
 
-const RECOMMENDED = [
-  { id: 'rec-1', name: 'Premium Moisturizer Cream', rating: 4, reviewCount: 88, price: 1299, status: 'In Stock', statusColor: 'text-green-500', image: 'https://placehold.co/56x56/f3e8ff/7e22ce?text=🧴' },
-  { id: 'rec-2', name: 'Instant Camera — Retro', rating: 4.5, reviewCount: 201, price: 9850, status: 'Only 5 left', statusColor: 'text-red-400', image: 'https://placehold.co/56x56/ede9fe/5b21b6?text=📷' },
-  { id: 'rec-3', name: 'Aromatherapy Candle Set', rating: 5, reviewCount: 44, price: 2750, status: 'In Stock', statusColor: 'text-green-500', image: 'https://placehold.co/56x56/fce4ec/c2185b?text=🕯️' },
-];
-
-const CONTINUE_SHOPPING = [
-  { id: 'cont-1', name: 'Sun Hat', price: 850, image: 'https://placehold.co/80x70/f3e8ff/7e22ce?text=👒' },
-  { id: 'cont-2', name: 'Silk Scarf', price: 1200, image: 'https://placehold.co/80x70/fce4ec/9b59b6?text=🧣' },
-  { id: 'cont-3', name: 'Sunglasses', price: 2300, image: 'https://placehold.co/80x70/ede9fe/5b21b6?text=🕶️' },
-  { id: 'cont-4', name: 'Yoga Mat', price: 3100, image: 'https://placehold.co/80x70/f3e8ff/7e22ce?text=🧘' },
-  { id: 'cont-5', name: 'Earbuds', price: 7499, image: 'https://placehold.co/80x70/ddd6fe/4338ca?text=🎧' },
-  { id: 'cont-6', name: 'Indoor Plant', price: 650, image: 'https://placehold.co/80x70/fce4ec/c2185b?text=🪴' },
-];
-
-// ---------------------------------------------------------------------------
-// Horizontal scroll row — used for "Best Sellers in Clothing" and
-// "Popular products in Beauty". Uses useRef to drive scrollBy() on the
-// left/right arrow controls, and tracks scroll position to disable arrows
-// at each end.
-// ---------------------------------------------------------------------------
+// Horizontal Scroll Component
 function ScrollableProductRow({ title, subtitle, seeAllHref, products }) {
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -190,8 +132,7 @@ function ScrollableProductRow({ title, subtitle, seeAllHref, products }) {
       el.removeEventListener('scroll', updateScrollState);
       window.removeEventListener('resize', updateScrollState);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [products]);
 
   function scroll(direction) {
     const el = scrollRef.current;
@@ -250,25 +191,121 @@ function ScrollableProductRow({ title, subtitle, seeAllHref, products }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Homepage
-// ---------------------------------------------------------------------------
 export default function HomePage() {
+  const [heroSlides, setHeroSlides] = useState(FALLBACK_SLIDES);
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
+  const [wishlistItems, setWishlistItems] = useState(FALLBACK_WISHLIST);
+
   const [currentSlide, setCurrentSlide] = useState(0);
   const intervalRef = useRef(null);
+
+  // Dynamic Product States from Supabase
+  const [todaysDeals, setTodaysDeals] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [clothingProducts, setClothingProducts] = useState([]);
+  const [beautyProducts, setBeautyProducts] = useState([]);
+  const [recommendedProducts, setRecommendedProducts] = useState([]);
+  const [continueShoppingProducts, setContinueShoppingProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // ── Fetch Products from Supabase ───────────────────────────────────────────
+  useEffect(() => {
+    async function fetchAllData() {
+      try {
+        setLoading(true);
+        const supabase = createClient();
+
+        // 1. Fetch products from Supabase
+        const { data: dbProducts, error: prodErr } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!prodErr && dbProducts && dbProducts.length > 0) {
+          const normalized = dbProducts.map(normalizeProduct);
+
+          setFeaturedProducts(normalized.slice(0, 12));
+
+          const clothing = normalized.filter(
+            (p) =>
+              p.category?.toLowerCase().includes('fashion') ||
+              p.category?.toLowerCase().includes('cloth') ||
+              p.category?.toLowerCase().includes('apparel')
+          );
+          setClothingProducts(clothing.length > 0 ? clothing : normalized.slice(0, 8));
+
+          const beauty = normalized.filter(
+            (p) =>
+              p.category?.toLowerCase().includes('beauty') ||
+              p.category?.toLowerCase().includes('skincare') ||
+              p.category?.toLowerCase().includes('cosmetic')
+          );
+          setBeautyProducts(beauty.length > 0 ? beauty : normalized.slice(2, 10));
+
+          const deals = normalized.filter((p) => p.discount > 0 || p.originalPrice);
+          setTodaysDeals(deals.length >= 2 ? deals.slice(0, 4) : normalized.slice(0, 4));
+
+          setRecommendedProducts(normalized.slice(0, 3));
+          setContinueShoppingProducts(normalized.slice(3, 9));
+        }
+
+        // 2. Fetch banners if table exists (optional fallback retained)
+        const { data: dbBanners } = await supabase.from('banners').select('*');
+        if (dbBanners && dbBanners.length > 0) {
+          setHeroSlides(
+            dbBanners.map((b, i) => ({
+              id: b.id || i,
+              gradient: b.gradient || 'linear-gradient(120deg,#e8d5f0 0%,#c084d0 60%,#7c3aed 100%)',
+              tag: b.tag || 'Offer',
+              tagBg: b.tag_bg || 'bg-purple-700',
+              headingStart: b.heading_start || '',
+              highlight: b.highlight || '',
+              headingEnd: b.heading_end || '',
+              highlightColor: b.highlight_color || 'text-pink-200',
+              description: b.description || '',
+              buttonLabel: b.button_label || 'Shop Now',
+              buttonIcon: b.button_icon || 'fa-arrow-right',
+              buttonTextColor: b.button_text_color || 'text-purple-700',
+              buttonHoverBg: b.button_hover_bg || 'hover:bg-purple-50',
+              image: b.image_url || b.image,
+              href: b.href || '/products',
+            }))
+          );
+        }
+
+        // 3. Fetch categories if table exists (optional fallback retained)
+        const { data: dbCats } = await supabase.from('categories').select('*');
+        if (dbCats && dbCats.length > 0) {
+          setCategories(
+            dbCats.map((c) => ({
+              name: c.name,
+              href: c.href || `/products?category=${encodeURIComponent(c.name)}`,
+              image: c.icon_url || c.image || 'https://placehold.co/48x48/ede9fe/5b21b6?text=📦',
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching data from Supabase:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchAllData();
+  }, []);
 
   function goToSlide(index) {
     setCurrentSlide(index);
   }
 
   function moveSlide(direction) {
-    setCurrentSlide((prev) => (prev + direction + HERO_SLIDES.length) % HERO_SLIDES.length);
+    setCurrentSlide((prev) => (prev + direction + heroSlides.length) % heroSlides.length);
   }
 
   function startAutoplay() {
     stopAutoplay();
     intervalRef.current = window.setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 4500);
   }
 
@@ -282,27 +319,24 @@ export default function HomePage() {
   useEffect(() => {
     startAutoplay();
     return stopAutoplay;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [heroSlides]);
 
   return (
     <div className="bg-hero-gradient min-h-[calc(100vh-100px)] overflow-x-hidden">
-      {/* =================================================================
-          HERO CAROUSEL — the purple/pink banner at the top of the page
-      ================================================================= */}
+      {/* HERO CAROUSEL */}
       <div
         className="relative overflow-hidden h-[300px] sm:h-[340px] md:h-[380px]"
         onMouseEnter={stopAutoplay}
         onMouseLeave={startAutoplay}
       >
         <div
-          className="carousel-track h-full"
+          className="carousel-track h-full transition-transform duration-500 ease-out flex"
           style={{ transform: `translateX(-${currentSlide * 100}%)` }}
         >
-          {HERO_SLIDES.map((slide) => (
+          {heroSlides.map((slide) => (
             <div
               key={slide.id}
-              className="carousel-slide h-full flex items-center justify-between px-4 sm:px-6 md:px-16"
+              className="carousel-slide h-full w-full shrink-0 flex items-center justify-between px-4 sm:px-6 md:px-16"
               style={{ background: slide.gradient }}
             >
               <div className="max-w-lg min-w-0">
@@ -328,11 +362,13 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              <img
-                src={slide.image}
-                alt={slide.tag}
-                className="rounded-2xl shadow-2xl hidden lg:block h-[220px] xl:h-[260px] w-[320px] xl:w-[400px] object-cover"
-              />
+              {slide.image && (
+                <img
+                  src={slide.image}
+                  alt={slide.tag}
+                  className="rounded-2xl shadow-2xl hidden lg:block h-[220px] xl:h-[260px] w-[320px] xl:w-[400px] object-cover"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -357,7 +393,7 @@ export default function HomePage() {
 
         {/* Dots */}
         <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 sm:gap-2 z-10">
-          {HERO_SLIDES.map((slide, index) => (
+          {heroSlides.map((slide, index) => (
             <button
               key={slide.id}
               type="button"
@@ -371,12 +407,9 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* =================================================================
-          DASHBOARD GRID — 4-container grid (Today's Deals spans 2,
-          Sign-in panel + Wishlist fill the remaining 2 columns)
-      ================================================================= */}
+      {/* DASHBOARD GRID */}
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 py-5 sm:py-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Container 1+2: Today's Deals (spans 2 columns on large screens) */}
+        {/* Today's Deals */}
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-3.5 sm:p-4 col-span-1 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base sm:text-lg font-black text-purple-900">Today&apos;s Deals</h2>
@@ -385,32 +418,39 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-            {TODAYS_DEALS.map((deal) => (
-              <div
+            {todaysDeals.slice(0, 2).map((deal) => (
+              <Link
                 key={deal.id}
-                className="product-card bg-gradient-to-br from-pink-50 to-purple-50 rounded-xl p-2.5 sm:p-3 cursor-pointer border border-purple-100 min-w-0"
+                href={`/products/${deal.id}`}
+                className="product-card bg-gradient-to-br from-pink-50 to-purple-50 rounded-xl p-2.5 sm:p-3 cursor-pointer border border-purple-100 min-w-0 block hover:shadow-md transition"
               >
                 <div className="relative mb-2">
                   <img src={deal.image} className="w-full rounded-lg object-cover h-[70px] sm:h-[90px]" alt={deal.name} />
-                  <span className="deal-badge absolute top-1 left-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                    -{deal.discount}%
-                  </span>
+                  {deal.discount > 0 && (
+                    <span className="deal-badge absolute top-1 left-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                      -{deal.discount}%
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs font-bold text-gray-800 leading-tight mb-1 line-clamp-2">{deal.name}</p>
                 <div className="flex items-center flex-wrap gap-1">
                   <span className="text-purple-700 font-black text-xs sm:text-sm">Rs {deal.price.toLocaleString()}</span>
-                  <span className="text-gray-400 text-[10px] sm:text-xs line-through">Rs {deal.originalPrice.toLocaleString()}</span>
+                  {deal.originalPrice && (
+                    <span className="text-gray-400 text-[10px] sm:text-xs line-through">
+                      Rs {deal.originalPrice.toLocaleString()}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1.5 bg-gray-200 rounded-full h-1.5 overflow-hidden">
                   <div className="bg-red-400 h-full rounded-full" style={{ width: `${deal.claimed}%` }} />
                 </div>
                 <p className="text-[10px] text-red-500 font-bold mt-0.5">{deal.claimed}% claimed</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
 
-        {/* Container 3: Sign-in panel */}
+        {/* Sign-in Panel */}
         <div className="bg-white/85 backdrop-blur rounded-2xl shadow-lg p-4 sm:p-5 flex flex-col items-center justify-center text-center">
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center mb-3 shadow">
             <i className="fas fa-user text-white text-2xl" />
@@ -432,23 +472,16 @@ export default function HomePage() {
           <p className="text-[10px] text-gray-400 mt-3">By continuing, you agree to our Terms &amp; Conditions.</p>
         </div>
 
-        {/* Container 4: Wishlist */}
+        {/* Wishlist Panel */}
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-black text-purple-900">Your Wishlist</h2>
             <i className="fas fa-heart text-pink-400" />
           </div>
           <ul className="space-y-2">
-            {WISHLIST_ITEMS.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 p-2 rounded-xl hover:bg-purple-50 cursor-pointer"
-              >
-                <img
-                  src={item.image}
-                  className="rounded-lg w-10 h-10 object-cover shrink-0"
-                  alt={item.name}
-                />
+            {wishlistItems.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-purple-50 cursor-pointer">
+                <img src={item.image} className="rounded-lg w-10 h-10 object-cover shrink-0" alt={item.name} />
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-gray-700 truncate">{item.name}</p>
                   <p className="text-xs text-purple-600 font-bold">Rs {item.price.toLocaleString()}</p>
@@ -462,9 +495,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* =================================================================
-          SHOP BY CATEGORY
-      ================================================================= */}
+      {/* SHOP BY CATEGORY */}
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
@@ -475,7 +506,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5 sm:gap-3">
-            {CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <Link key={category.name} href={category.href}>
                 <div className="cat-card flex flex-col items-center p-2.5 sm:p-3 rounded-xl bg-gradient-to-b from-pink-50 to-purple-50 cursor-pointer border border-purple-100 hover:shadow-md transition-shadow">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 flex items-center justify-center mb-2 overflow-hidden shrink-0">
@@ -491,9 +522,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* =================================================================
-          FEATURED PRODUCTS — static responsive grid
-      ================================================================= */}
+      {/* FEATURED PRODUCTS */}
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
@@ -502,41 +531,43 @@ export default function HomePage() {
               See all
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-            {FEATURED_PRODUCTS.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="py-8 text-center text-xs font-semibold text-purple-600">Loading live products...</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+              {featuredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* =================================================================
-          BEST SELLERS IN CLOTHING — horizontal scroll carousel
-      ================================================================= */}
-      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4">
-        <ScrollableProductRow
-          title="Best Sellers in Clothing"
-          subtitle="Top-rated fashion picks this week"
-          seeAllHref="/products?category=Fashion"
-          products={CLOTHING_BEST_SELLERS}
-        />
-      </div>
+      {/* BEST SELLERS IN CLOTHING */}
+      {clothingProducts.length > 0 && (
+        <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4">
+          <ScrollableProductRow
+            title="Best Sellers in Clothing"
+            subtitle="Top-rated fashion picks this week"
+            seeAllHref="/products?category=Fashion"
+            products={clothingProducts}
+          />
+        </div>
+      )}
 
-      {/* =================================================================
-          POPULAR PRODUCTS IN BEAUTY — horizontal scroll carousel
-      ================================================================= */}
-      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4">
-        <ScrollableProductRow
-          title="Popular products in Beauty"
-          subtitle="Loved by thousands of Critipick shoppers"
-          seeAllHref="/products?category=Beauty"
-          products={BEAUTY_POPULAR}
-        />
-      </div>
+      {/* POPULAR PRODUCTS IN BEAUTY */}
+      {beautyProducts.length > 0 && (
+        <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4">
+          <ScrollableProductRow
+            title="Popular products in Beauty"
+            subtitle="Loved by thousands of Critipick shoppers"
+            seeAllHref="/products?category=Beauty"
+            products={beautyProducts}
+          />
+        </div>
+      )}
 
-      {/* =================================================================
-          PROMO BANNER + RECOMMENDED FOR YOU
-      ================================================================= */}
+      {/* PROMO BANNER + RECOMMENDED FOR YOU */}
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-4 grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         <div
           className="lg:col-span-1 rounded-2xl overflow-hidden shadow-lg relative flex items-end min-h-[180px] sm:min-h-[200px]"
@@ -569,7 +600,7 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {RECOMMENDED.map((item) => (
+            {recommendedProducts.map((item) => (
               <Link
                 key={item.id}
                 href={`/products/${item.id}`}
@@ -606,37 +637,38 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* =================================================================
-          CONTINUE SHOPPING
-      ================================================================= */}
-      <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-8">
-        <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base sm:text-lg font-black text-purple-900">Continue Shopping</h2>
-            <Link href="/profile#history" className="text-xs text-purple-600 font-bold hover:underline">
-              See history
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
-            {CONTINUE_SHOPPING.map((item) => (
-              <div
-                key={item.id}
-                className="product-card p-2 rounded-xl bg-purple-50/60 cursor-pointer flex flex-col items-center border border-purple-100 min-w-0"
-              >
-                <img
-                  src={item.image}
-                  className="rounded-lg mb-2 w-full h-[60px] sm:h-[70px] object-cover"
-                  alt={item.name}
-                />
-                <p className="text-[10px] sm:text-[11px] font-bold text-gray-700 text-center line-clamp-1">
-                  {item.name}
-                </p>
-                <p className="text-purple-700 font-black text-xs mt-0.5">Rs {item.price.toLocaleString()}</p>
-              </div>
-            ))}
+      {/* CONTINUE SHOPPING */}
+      {continueShoppingProducts.length > 0 && (
+        <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 pb-8">
+          <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base sm:text-lg font-black text-purple-900">Continue Shopping</h2>
+              <Link href="/profile#history" className="text-xs text-purple-600 font-bold hover:underline">
+                See history
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
+              {continueShoppingProducts.map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/products/${item.id}`}
+                  className="product-card p-2 rounded-xl bg-purple-50/60 cursor-pointer flex flex-col items-center border border-purple-100 min-w-0 hover:shadow-sm transition"
+                >
+                  <img
+                    src={item.image}
+                    className="rounded-lg mb-2 w-full h-[60px] sm:h-[70px] object-cover"
+                    alt={item.name}
+                  />
+                  <p className="text-[10px] sm:text-[11px] font-bold text-gray-700 text-center line-clamp-1">
+                    {item.name}
+                  </p>
+                  <p className="text-purple-700 font-black text-xs mt-0.5">Rs {item.price.toLocaleString()}</p>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

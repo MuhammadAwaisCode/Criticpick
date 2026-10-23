@@ -1,12 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import TopNav from '@/components/TopNav';
-import SubNav from '@/components/SubNav';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
-// ---------------------------------------------------------------------------
-// Static config — swap for API/session data once the backend is wired up.
-// ---------------------------------------------------------------------------
 const PROFILE_TABS = [
   { key: 'overview', label: 'Account Overview', icon: 'fa-user-cog' },
   { key: 'orders', label: 'My Orders', icon: 'fa-box' },
@@ -20,27 +17,67 @@ const REGIONS = [
   { value: 'SA', label: 'Saudi Arabia' },
 ];
 
-const DEFAULT_PROFILE = {
-  name: 'Criticpick User',
-  email: 'user@example.com',
-  phone: '+92 300 1234567',
+const EMPTY_PROFILE = {
+  name: '',
+  email: '',
+  phone: '',
   region: 'PK',
-  address: 'Street 4, Sector G, Islamabad, Pakistan',
+  address: '',
 };
 
 export default function ProfilePage() {
+  const router = useRouter();
+  const supabase = createClient();
+
   const [activeTab, setActiveTab] = useState('overview');
   const [avatarImage, setAvatarImage] = useState(null);
-  const [formValues, setFormValues] = useState(DEFAULT_PROFILE);
-  const [savedValues, setSavedValues] = useState(DEFAULT_PROFILE);
+  const [formValues, setFormValues] = useState(EMPTY_PROFILE);
+  const [savedValues, setSavedValues] = useState(EMPTY_PROFILE);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState({ message: '', isError: false });
 
   const hasUnsavedChanges = JSON.stringify(formValues) !== JSON.stringify(savedValues);
 
-  // Reactive avatar picker: reads the selected file client-side via
-  // FileReader and swaps the preview immediately — no upload round-trip
-  // needed until the "Save Changes" flow is wired to a real API.
+  // 1. Supabase Fetch User Data
+  useEffect(() => {
+    async function loadUserProfile() {
+      setIsLoading(true);
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        router.push('/signin/customer');
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      const loadedProfile = {
+        name: profile?.full_name || profile?.name || user.user_metadata?.full_name || '',
+        email: user.email || '',
+        phone: profile?.phone || '',
+        region: profile?.region || 'PK',
+        address: profile?.address || '',
+      };
+
+      setFormValues(loadedProfile);
+      setSavedValues(loadedProfile);
+
+      if (profile?.avatar_url) {
+        setAvatarImage(profile.avatar_url);
+      }
+
+      setIsLoading(false);
+    }
+
+    loadUserProfile();
+  }, []);
+
   function handleAvatarChange(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -51,49 +88,70 @@ export default function ProfilePage() {
 
   function handleFieldChange(field, value) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
-    setSaveMessage('');
+    setSaveStatus({ message: '', isError: false });
   }
 
   function handleCancel() {
     setFormValues(savedValues);
-    setSaveMessage('');
+    setSaveStatus({ message: '', isError: false });
   }
 
-  function handleSubmit(event) {
+  // 2. Updated Save Handler (.update instead of .upsert)
+  async function handleSubmit(event) {
     event.preventDefault();
     if (!hasUnsavedChanges) return;
 
     setIsSaving(true);
-    setSaveMessage('');
-    // TODO: replace with a real PATCH /api/profile call once the backend is
-    // wired up. The uploaded avatar (avatarImage, currently a data URL)
-    // should be sent as multipart/form-data or uploaded separately.
-    window.setTimeout(() => {
-      setSavedValues(formValues);
-      setIsSaving(false);
-      setSaveMessage('Profile updated successfully.');
-    }, 600);
+    setSaveStatus({ message: '', isError: false });
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: formValues.name,
+          phone: formValues.phone,
+          region: formValues.region,
+          address: formValues.address,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        setSaveStatus({
+          message: 'Failed to update: ' + error.message,
+          isError: true,
+        });
+      } else {
+        setSavedValues(formValues);
+        setSaveStatus({
+          message: 'Profile updated successfully.',
+          isError: false,
+        });
+      }
+    }
+
+    setIsSaving(false);
   }
 
   const avatarFallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
     formValues.name || 'Criticpick User'
   )}&background=7e22ce&color=fff&size=200`;
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-purple-900 font-bold">
+        Loading profile data...
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
-      {/* 
-        NOTE: Navbars aur Footer layout.js se automatic aa rahe hain.
-        Aap ke original elements ko bina chede comment kar diya hai 
-        taake page par duplicate double items show na hon.
-      */}
-      {/* <TopNav /> */}
-      {/* <SubNav /> */}
-
       <main className="flex-grow max-w-6xl w-full mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-          {/* ===============================================================
-              LEFT COLUMN — avatar picker + navigation
-          =============================================================== */}
+          {/* LEFT COLUMN — Avatar & Tabs */}
           <aside className="bg-white/85 backdrop-blur rounded-2xl shadow-xl overflow-hidden p-6 lg:col-span-1 text-center border border-white/40">
             <div className="relative w-32 h-32 mx-auto mb-4 group">
               <div className="w-full h-full rounded-full border-4 border-purple-500 shadow-lg overflow-hidden bg-white">
@@ -151,9 +209,7 @@ export default function ProfilePage() {
             </div>
           </aside>
 
-          {/* ===============================================================
-              RIGHT COLUMN — profile settings form
-          =============================================================== */}
+          {/* RIGHT COLUMN — Profile Form */}
           <section className="bg-white/85 backdrop-blur rounded-2xl shadow-xl overflow-hidden lg:col-span-3 border border-white/40">
             <div className="h-2 bg-gradient-to-r from-purple-600 via-pink-500 to-amber-400" />
             <div className="p-6 md:p-8">
@@ -193,7 +249,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Email (read-only) */}
+                  {/* Email (Read-Only) */}
                   <div className="space-y-1.5">
                     <label
                       htmlFor="profile-email"
@@ -237,7 +293,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Default Region */}
+                  {/* Region */}
                   <div className="space-y-1.5">
                     <label
                       htmlFor="profile-region"
@@ -267,7 +323,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Shipping Address */}
+                  {/* Address */}
                   <div className="space-y-1.5 md:col-span-2">
                     <label
                       htmlFor="profile-address"
@@ -291,9 +347,18 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="pt-4 border-t border-purple-100 flex flex-wrap items-center gap-4 justify-end">
-                  {saveMessage && (
-                    <span className="text-xs font-bold text-green-600 mr-auto flex items-center gap-1.5">
-                      <i className="fas fa-circle-check" /> {saveMessage}
+                  {saveStatus.message && (
+                    <span
+                      className={`text-xs font-bold mr-auto flex items-center gap-1.5 ${
+                        saveStatus.isError ? 'text-red-600' : 'text-green-600'
+                      }`}
+                    >
+                      <i
+                        className={`fas ${
+                          saveStatus.isError ? 'fa-triangle-exclamation' : 'fa-circle-check'
+                        }`}
+                      />
+                      {saveStatus.message}
                     </span>
                   )}
                   <button
@@ -318,8 +383,6 @@ export default function ProfilePage() {
           </section>
         </div>
       </main>
-
-      {/* <Footer /> */}
     </div>
   );
 }

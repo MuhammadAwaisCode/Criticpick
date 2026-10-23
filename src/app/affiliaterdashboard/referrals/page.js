@@ -1,72 +1,70 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Search, 
-  Filter, 
-  UserPlus, 
   DollarSign, 
-  TrendingUp, 
-  Clock, 
   CheckCircle2, 
   XCircle,
   Copy,
   Check,
-  ChevronRight
+  Loader2
 } from 'lucide-react';
+import { fetchDirectReferrals } from '@/actions/affiliateActions';
 
 export default function DirectReferralsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [copied, setCopied] = useState(false);
+  const [referrals, setReferrals] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Referral Link
-  const masterReferralLink = "https://yourwebsite.com/register?ref=JOHN123";
+  // Dynamic user ID handled inside Server Action
+  const affiliateId = 'CURRENT_USER_ID';
 
-  // Mock Referrals Data
-  const referrals = [
-    {
-      id: 'REF-101',
-      name: 'Sarah Ahmed',
-      email: 'sarah.a@gmail.com',
-      joinedDate: 'Jul 24, 2026',
-      status: 'Active',
-      totalSalesGenerated: '$1,250.00',
-      yourCommission: '$12.50', // 1% Direct Tier Bonus
-      avatar: 'SA'
-    },
-    {
-      id: 'REF-102',
-      name: 'Ali Raza',
-      email: 'ali.raza@yahoo.com',
-      joinedDate: 'Jul 20, 2026',
-      status: 'Active',
-      totalSalesGenerated: '$3,400.00',
-      yourCommission: '$34.00',
-      avatar: 'AR'
-    },
-    {
-      id: 'REF-103',
-      name: 'Usman Malik',
-      email: 'usman.m@outlook.com',
-      joinedDate: 'Jun 15, 2026',
-      status: 'Inactive',
-      totalSalesGenerated: '$0.00',
-      yourCommission: '$0.00',
-      avatar: 'UM'
-    },
-    {
-      id: 'REF-104',
-      name: 'Fatima Khan',
-      email: 'fatima.k@gmail.com',
-      joinedDate: 'May 28, 2026',
-      status: 'Active',
-      totalSalesGenerated: '$890.00',
-      yourCommission: '$8.90',
-      avatar: 'FK'
-    },
-  ];
+  // Referral Master Link
+  const masterReferralLink = typeof window !== 'undefined' 
+    ? `${window.location.origin}/register?ref=${affiliateId}`
+    : `https://yourwebsite.com/register?ref=${affiliateId}`;
+
+  // Fetch Live Direct Referrals from Supabase
+  useEffect(() => {
+    async function loadReferrals() {
+      setLoading(true);
+      const data = await fetchDirectReferrals(affiliateId);
+
+      // Transform DB records into component structure
+      const formatted = data.map((item) => {
+        const initials = item.full_name
+          ? item.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+          : 'AF';
+
+        const totalSales = Number(item.total_sales || 0);
+        const commissionBonus = (totalSales * 0.01).toFixed(2); // 1% Override Bonus
+
+        return {
+          id: item.id,
+          name: item.full_name || 'Affiliate Partner',
+          email: item.email || 'N/A',
+          joinedDate: new Date(item.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: '2-digit',
+            year: 'numeric'
+          }),
+          status: item.verification_status === 'verified' || item.rank ? 'Active' : 'Inactive',
+          totalSalesGenerated: `$${totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          yourCommission: `$${commissionBonus}`,
+          avatar: initials
+        };
+      });
+
+      setReferrals(formatted);
+      setLoading(false);
+    }
+
+    loadReferrals();
+  }, []);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(masterReferralLink);
@@ -80,6 +78,13 @@ export default function DirectReferralsPage() {
     const matchesStatus = statusFilter === 'All' || ref.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Calculate dynamic metrics
+  const activePartnersCount = referrals.filter(r => r.status === 'Active').length;
+  const totalTierCommissions = referrals.reduce((acc, curr) => {
+    const num = parseFloat(curr.yourCommission.replace('$', '')) || 0;
+    return acc + num;
+  }, 0).toFixed(2);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
@@ -142,7 +147,7 @@ export default function DirectReferralsPage() {
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Partners</p>
             <p className="text-2xl font-black text-emerald-600 mt-0.5">
-              {referrals.filter(r => r.status === 'Active').length}
+              {activePartnersCount}
             </p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -153,7 +158,7 @@ export default function DirectReferralsPage() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tier Commissions</p>
-            <p className="text-2xl font-black text-purple-600 mt-0.5">$55.40</p>
+            <p className="text-2xl font-black text-purple-600 mt-0.5">${totalTierCommissions}</p>
           </div>
           <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
             <DollarSign className="w-5 h-5" />
@@ -208,56 +213,64 @@ export default function DirectReferralsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredReferrals.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                  
-                  {/* User Info */}
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs shrink-0 border border-purple-200">
-                        {item.avatar}
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900">{item.name}</p>
-                        <p className="text-[11px] text-slate-400">{item.email}</p>
-                      </div>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center">
+                    <Loader2 className="w-6 h-6 text-purple-600 animate-spin mx-auto" />
                   </td>
-
-                  {/* Joined Date */}
-                  <td className="py-3.5 px-4 text-slate-600 font-medium">
-                    {item.joinedDate}
-                  </td>
-
-                  {/* Status Badge */}
-                  <td className="py-3.5 px-4">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                      item.status === 'Active'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}>
-                      {item.status === 'Active' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                      {item.status}
-                    </span>
-                  </td>
-
-                  {/* Generated Sales */}
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-800">
-                    {item.totalSalesGenerated}
-                  </td>
-
-                  {/* Commission */}
-                  <td className="py-3.5 px-4 text-right font-black text-emerald-600">
-                    {item.yourCommission}
-                  </td>
-
                 </tr>
-              ))}
+              ) : filteredReferrals.length > 0 ? (
+                filteredReferrals.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                    
+                    {/* User Info */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs shrink-0 border border-purple-200">
+                          {item.avatar}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{item.name}</p>
+                          <p className="text-[11px] text-slate-400">{item.email}</p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Joined Date */}
+                    <td className="py-3.5 px-4 text-slate-600 font-medium">
+                      {item.joinedDate}
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="py-3.5 px-4">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                        item.status === 'Active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                      }`}>
+                        {item.status === 'Active' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                        {item.status}
+                      </span>
+                    </td>
+
+                    {/* Generated Sales */}
+                    <td className="py-3.5 px-4 text-right font-bold text-slate-800">
+                      {item.totalSalesGenerated}
+                    </td>
+
+                    {/* Commission */}
+                    <td className="py-3.5 px-4 text-right font-black text-emerald-600">
+                      {item.yourCommission}
+                    </td>
+
+                  </tr>
+                ))
+              ) : null}
             </tbody>
           </table>
         </div>
 
-        {filteredReferrals.length === 0 && (
+        {!loading && filteredReferrals.length === 0 && (
           <div className="p-8 text-center text-slate-400 text-xs">
             No direct referrals found matching your search.
           </div>

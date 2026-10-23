@@ -1,25 +1,46 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Network, 
   Users, 
   ChevronRight, 
   ChevronDown, 
-  User, 
   Layers, 
-  TrendingUp, 
-  Award, 
   Zap,
-  ShieldCheck
+  Loader2
 } from 'lucide-react';
+import { fetchReferralTree } from '@/actions/affiliateActions';
 
 export default function ReferralTreePage() {
-  // Tree expansion states
-  const [expandedNodes, setExpandedNodes] = useState({
-    'node-root': true,
-    'node-sarah': true,
-  });
+  const [loading, setLoading] = useState(true);
+  const [networkTree, setNetworkTree] = useState(null);
+  const [expandedNodes, setExpandedNodes] = useState({ 'node-root': true });
+
+  // Dynamic user ID handled inside Server Action
+  const affiliateId = 'CURRENT_USER_ID';
+
+  useEffect(() => {
+    async function loadTreeData() {
+      setLoading(true);
+      const data = await fetchReferralTree(affiliateId);
+      
+      if (data) {
+        setNetworkTree(data);
+        // Default expand top-level children
+        if (data.children && data.children.length > 0) {
+          const initialExpansions = { 'node-root': true };
+          data.children.forEach(child => {
+            initialExpansions[child.id] = true;
+          });
+          setExpandedNodes(initialExpansions);
+        }
+      }
+      setLoading(false);
+    }
+
+    loadTreeData();
+  }, []);
 
   const toggleNode = (id) => {
     setExpandedNodes(prev => ({
@@ -28,80 +49,26 @@ export default function ReferralTreePage() {
     }));
   };
 
-  // Mock Multi-Tier Network Tree Data
-  const networkTree = {
-    id: 'node-root',
-    name: 'You (John Doe)',
-    role: 'Master Partner',
-    tier: 'Root',
-    totalNetwork: 12,
-    salesVolume: '$8,450.00',
-    avatar: 'YOU',
-    children: [
-      {
-        id: 'node-sarah',
-        name: 'Sarah Ahmed',
-        role: 'Tier 1 Partner',
-        joined: 'Jul 24, 2026',
-        commissionRate: '1% Override',
-        directSales: '$1,250.00',
-        avatar: 'SA',
-        children: [
-          {
-            id: 'node-hamza',
-            name: 'Hamza Tariq',
-            role: 'Tier 2 Partner',
-            joined: 'Jul 28, 2026',
-            commissionRate: '0.5% Override',
-            directSales: '$620.00',
-            avatar: 'HT',
-            children: []
-          },
-          {
-            id: 'node-zoya',
-            name: 'Zoya Hassaan',
-            role: 'Tier 2 Partner',
-            joined: 'Jul 29, 2026',
-            commissionRate: '0.5% Override',
-            directSales: '$400.00',
-            avatar: 'ZH',
-            children: []
-          }
-        ]
-      },
-      {
-        id: 'node-ali',
-        name: 'Ali Raza',
-        role: 'Tier 1 Partner',
-        joined: 'Jul 20, 2026',
-        commissionRate: '1% Override',
-        directSales: '$3,400.00',
-        avatar: 'AR',
-        children: [
-          {
-            id: 'node-bilal',
-            name: 'Bilal Chaudhry',
-            role: 'Tier 2 Partner',
-            joined: 'Jul 22, 2026',
-            commissionRate: '0.5% Override',
-            directSales: '$1,100.00',
-            avatar: 'BC',
-            children: []
-          }
-        ]
-      },
-      {
-        id: 'node-fatima',
-        name: 'Fatima Khan',
-        role: 'Tier 1 Partner',
-        joined: 'May 28, 2026',
-        commissionRate: '1% Override',
-        directSales: '$890.00',
-        avatar: 'FK',
-        children: []
-      }
-    ]
+  // Helper to count total nodes recursively
+  const countNodes = (node, levelTarget = null, currentLevel = 0) => {
+    if (!node) return 0;
+    let count = 0;
+    
+    if (levelTarget === null || currentLevel === levelTarget) {
+      if (currentLevel > 0) count += 1;
+    }
+
+    if (node.children && node.children.length > 0) {
+      node.children.forEach(child => {
+        count += countNodes(child, levelTarget, currentLevel + 1);
+      });
+    }
+    return count;
   };
+
+  const totalNetworkCount = networkTree ? countNodes(networkTree) : 0;
+  const tier1Count = networkTree ? countNodes(networkTree, 1) : 0;
+  const tier2Count = networkTree ? countNodes(networkTree, 2) : 0;
 
   // Recursive Tree Render Component
   const RenderTreeNode = ({ node, level = 0 }) => {
@@ -214,7 +181,7 @@ export default function ReferralTreePage() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Network Size</p>
-            <p className="text-2xl font-black text-slate-900 mt-0.5">12 Affiliates</p>
+            <p className="text-2xl font-black text-slate-900 mt-0.5">{totalNetworkCount} Affiliates</p>
           </div>
           <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
             <Network className="w-5 h-5" />
@@ -224,7 +191,7 @@ export default function ReferralTreePage() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tier-1 Directs</p>
-            <p className="text-2xl font-black text-purple-600 mt-0.5">3 Partners</p>
+            <p className="text-2xl font-black text-purple-600 mt-0.5">{tier1Count} Partners</p>
           </div>
           <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
             <Users className="w-5 h-5" />
@@ -234,7 +201,7 @@ export default function ReferralTreePage() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tier-2 Sub-Partners</p>
-            <p className="text-2xl font-black text-emerald-600 mt-0.5">9 Partners</p>
+            <p className="text-2xl font-black text-emerald-600 mt-0.5">{tier2Count} Partners</p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
             <Layers className="w-5 h-5" />
@@ -273,7 +240,16 @@ export default function ReferralTreePage() {
 
         {/* Tree Rendering */}
         <div className="pt-2">
-          <RenderTreeNode node={networkTree} />
+          {loading ? (
+            <div className="py-12 text-center">
+              <Loader2 className="w-8 h-8 text-purple-600 animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 mt-2 font-medium">Loading network hierarchy...</p>
+            </div>
+          ) : networkTree ? (
+            <RenderTreeNode node={networkTree} />
+          ) : (
+            <p className="text-xs text-slate-400 text-center py-8">No referral network tree found.</p>
+          )}
         </div>
 
       </div>

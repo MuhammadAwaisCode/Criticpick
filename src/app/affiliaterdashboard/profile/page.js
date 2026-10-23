@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -10,33 +10,97 @@ import {
   CreditCard, 
   CheckCircle2, 
   Clock, 
-  Save 
+  Save,
+  Loader2
 } from 'lucide-react';
+import { fetchAffiliateProfile, updateAffiliateProfile } from '@/actions/affiliateActions';
 
 export default function ProfilePage() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState('PENDING');
   const [selectedPayout, setSelectedPayout] = useState('bank');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const [profile, setProfile] = useState({
-    fullName: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+1 234 567 8900',
-    country: 'United States',
-    address: '123 Tech Street, Suite 400, New York, NY 10001',
-    bankName: 'Global City Bank',
-    accountHolder: 'John Doe',
-    accountNumber: '**** **** 8829',
-    routingNumber: '021000021',
-    paypalEmail: 'john.payouts@example.com',
-    wiseEmail: 'john.wise@example.com'
+    fullName: '',
+    email: '',
+    phone: '',
+    country: '',
+    address: '',
+    bankName: '',
+    accountHolder: '',
+    accountNumber: '',
+    routingNumber: '',
+    paypalEmail: '',
+    wiseEmail: ''
   });
 
-  const handleSubmit = (e) => {
+  // Load Profile Data from Supabase
+  useEffect(() => {
+    async function loadProfile() {
+      setLoading(true);
+      // NOTE: Pass actual logged-in user ID here from Auth session
+      const res = await fetchAffiliateProfile('CURRENT_USER_ID'); 
+      if (res) {
+        setProfile({
+          fullName: res.full_name || '',
+          email: res.email || '',
+          phone: res.phone || '',
+          country: res.country || '',
+          address: res.address || '',
+          bankName: res.payout_details?.bankName || '',
+          accountHolder: res.payout_details?.accountHolder || '',
+          accountNumber: res.payout_details?.accountNumber || '',
+          routingNumber: res.payout_details?.routingNumber || '',
+          paypalEmail: res.payout_details?.paypalEmail || '',
+          wiseEmail: res.payout_details?.wiseEmail || ''
+        });
+        setVerificationStatus(res.verification_status || 'PENDING');
+        setSelectedPayout(res.preferred_payout_method || 'bank');
+      }
+      setLoading(false);
+    }
+    loadProfile();
+  }, []);
+
+  // Save/Update Profile
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setSaving(true);
+
+    const updatePayload = {
+      fullName: profile.fullName,
+      phone: profile.phone,
+      country: profile.country,
+      address: profile.address,
+      preferredPayoutMethod: selectedPayout,
+      payoutDetails: {
+        bankName: profile.bankName,
+        accountHolder: profile.accountHolder,
+        accountNumber: profile.accountNumber,
+        routingNumber: profile.routingNumber,
+        paypalEmail: profile.paypalEmail,
+        wiseEmail: profile.wiseEmail
+      }
+    };
+
+    const res = await updateAffiliateProfile('CURRENT_USER_ID', updatePayload);
+    setSaving(false);
+
+    if (res?.success) {
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -275,9 +339,11 @@ export default function ProfilePage() {
         <div className="flex justify-end">
           <button
             type="submit"
-            className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-3 rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+            disabled={saving}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-3 rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
           >
-            <Save className="w-4 h-4" /> Save Profile Details
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? 'Saving...' : 'Save Profile Details'}
           </button>
         </div>
       </form>

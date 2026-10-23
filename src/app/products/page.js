@@ -1,43 +1,10 @@
 'use client';
-
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import ProductCard from '@/components/ProductCard';
-
-
-const ALL_PRODUCTS = [
-  { id: 'p-01', name: 'Matte Liquid Lipstick Set',        brand: 'Huda Beauty',   category: 'Beauty',      price: 2399,  originalPrice: 3999,  rating: 5,   reviewCount: 1204, image: 'https://placehold.co/260x200/fce4ec/9b59b6?text=Lipstick',    badge: 'SALE' },
-  { id: 'p-02', name: 'Vitamin C Brightening Serum',      brand: 'The Ordinary',  category: 'Beauty',      price: 1850,  originalPrice: 2500,  rating: 4,   reviewCount: 876,  image: 'https://placehold.co/260x200/f3e8ff/7e22ce?text=Serum',       badge: 'NEW' },
-  { id: 'p-03', name: 'Hydrating Foundation',             brand: 'Fenty Beauty',  category: 'Beauty',      price: 3299,  rating: 4.5, reviewCount: 540,  image: 'https://placehold.co/260x200/fdf2f8/a21caf?text=Foundation' },
-  { id: 'p-04', name: 'Oversized Denim Jacket',           brand: 'UrbanFit',      category: 'Fashion',     price: 4999,  originalPrice: 6999,  rating: 4.5, reviewCount: 320,  image: 'https://placehold.co/260x200/ede9fe/5b21b6?text=Jacket',      badge: 'BESTSELLER' },
-  { id: 'p-05', name: 'Floral Wrap Dress',                brand: 'Chic Lane',     category: 'Fashion',     price: 3200,  rating: 4,   reviewCount: 189,  image: 'https://placehold.co/260x200/fce4ec/9b59b6?text=Dress' },
-  { id: 'p-06', name: 'Classic Fit Chinos',               brand: 'Herringbone',   category: 'Fashion',     price: 2799,  originalPrice: 3499,  rating: 4.5, reviewCount: 271,  image: 'https://placehold.co/260x200/f3e8ff/7e22ce?text=Chinos',      badge: 'SALE' },
-  { id: 'p-07', name: 'Smart Watch Pro',                  brand: 'PulseTech',     category: 'Electronics', price: 15999, rating: 5,   reviewCount: 310,  image: 'https://placehold.co/260x200/ddd6fe/4338ca?text=Watch',        badge: 'BESTSELLER' },
-  { id: 'p-08', name: 'Wireless Noise-Cancelling Earbuds',brand: 'SoundCore',     category: 'Electronics', price: 7499,  originalPrice: 9999,  rating: 4.5, reviewCount: 812,  image: 'https://placehold.co/260x200/e0e7ff/312e81?text=Earbuds',     badge: 'SALE' },
-  { id: 'p-09', name: 'Instant Camera — Retro',           brand: 'Fujiroll',      category: 'Electronics', price: 9850,  rating: 4.5, reviewCount: 201,  image: 'https://placehold.co/260x200/ede9fe/5b21b6?text=Camera',       badge: 'NEW' },
-  { id: 'p-10', name: 'The Silent Garden — Novel',        brand: 'Penguin',       category: 'Books',       price: 899,   rating: 4.5, reviewCount: 156,  image: 'https://placehold.co/260x200/fef3c7/92400e?text=Novel' },
-  { id: 'p-11', name: 'Atomic Habits',                    brand: 'Random House',  category: 'Books',       price: 1199,  rating: 5,   reviewCount: 2043, image: 'https://placehold.co/260x200/fde68a/78350f?text=Habits',       badge: 'BESTSELLER' },
-  { id: 'p-12', name: 'Illustrated Kids Encyclopedia',    brand: 'DK',            category: 'Books',       price: 1699,  originalPrice: 2199,  rating: 4.5, reviewCount: 88,   image: 'https://placehold.co/260x200/fef9c3/854d0e?text=Encyclopedia', badge: 'SALE' },
-  { id: 'p-13', name: 'Aromatherapy Candle Set',          brand: 'Lumière',       category: 'Home',        price: 2750,  rating: 5,   reviewCount: 44,   image: 'https://placehold.co/260x200/fce4ec/c2185b?text=Candles' },
-  { id: 'p-14', name: 'Non-Stick Cookware Set (7pc)',     brand: 'ChefLine',      category: 'Home',        price: 8499,  originalPrice: 10999, rating: 4.5, reviewCount: 367,  image: 'https://placehold.co/260x200/e2e8f0/334155?text=Cookware',    badge: 'SALE' },
-  { id: 'p-15', name: 'Indoor Plant — Monstera',          brand: 'GreenNest',     category: 'Home',        price: 650,   rating: 4,   reviewCount: 210,  image: 'https://placehold.co/260x200/dcfce7/166534?text=Plant',        badge: 'NEW' },
-  { id: 'p-16', name: 'Running Shoes',                    brand: 'MoveWell',      category: 'Sports',      price: 6499,  rating: 4,   reviewCount: 523,  image: 'https://placehold.co/260x200/fce4ec/9b59b6?text=Shoes' },
-  { id: 'p-17', name: 'Yoga Mat — Extra Grip',            brand: 'ZenFlex',       category: 'Sports',      price: 3100,  rating: 4.5, reviewCount: 198,  image: 'https://placehold.co/260x200/f3e8ff/7e22ce?text=Yoga+Mat' },
-  { id: 'p-18', name: 'Adjustable Dumbbell Set',          brand: 'IronCore',      category: 'Sports',      price: 12999, originalPrice: 15999, rating: 5,   reviewCount: 76,   image: 'https://placehold.co/260x200/ddd6fe/4338ca?text=Dumbbells',   badge: 'SALE' },
-  { id: 'p-19', name: 'Wooden Building Blocks',           brand: 'TinyTots',      category: 'Kids',        price: 1899,  rating: 4.5, reviewCount: 132,  image: 'https://placehold.co/260x200/ede9fe/5b21b6?text=Blocks',       badge: 'BESTSELLER' },
-  { id: 'p-20', name: 'Plush Teddy Bear',                 brand: 'CuddleCo',      category: 'Kids',        price: 1299,  rating: 5,   reviewCount: 289,  image: 'https://placehold.co/260x200/fce4ec/9b59b6?text=Teddy' },
-  { id: 'p-21', name: "Kids' Learning Tablet",            brand: 'TinyTots',      category: 'Kids',        price: 5999,  originalPrice: 7499,  rating: 4,   reviewCount: 94,   image: 'https://placehold.co/260x200/f3e8ff/7e22ce?text=Tablet',      badge: 'SALE' },
-  { id: 'p-22', name: 'Multivitamin Gummies (60ct)',      brand: 'VitaBoost',     category: 'Health',      price: 1499,  rating: 4.5, reviewCount: 421,  image: 'https://placehold.co/260x200/fef3c7/92400e?text=Vitamins',     badge: 'NEW' },
-  { id: 'p-23', name: 'Digital Blood Pressure Monitor',   brand: 'PulseTech',     category: 'Health',      price: 3999,  rating: 4.5, reviewCount: 167,  image: 'https://placehold.co/260x200/dbeafe/1e3a8a?text=BP+Monitor' },
-  { id: 'p-24', name: 'Premium Moisturizer Cream',        brand: 'Neutrogena',    category: 'Health',      price: 1299,  rating: 4,   reviewCount: 88,   image: 'https://placehold.co/260x200/f3e8ff/7e22ce?text=Moisturizer' },
-  { id: 'p-25', name: 'Rose Glow Facial Serum',           brand: 'GlowLab',       category: 'Beauty',      price: 2199,  originalPrice: 2999,  rating: 4.5, reviewCount: 312,  image: 'https://placehold.co/260x200/fde3ef/9b59b6?text=Rose+Serum',  badge: 'NEW' },
-  { id: 'p-26', name: 'Ribbed Knit Sweater',              brand: 'Chic Lane',     category: 'Fashion',     price: 3599,  rating: 4,   reviewCount: 143,  image: 'https://placehold.co/260x200/e8d5f0/7c3aed?text=Sweater' },
-  { id: 'p-27', name: 'Everyday Linen Shirt',             brand: 'UrbanFit',      category: 'Fashion',     price: 2499,  rating: 4.5, reviewCount: 402,  image: 'https://placehold.co/260x200/d1c4e9/4c1d95?text=Shirt',       badge: 'BESTSELLER' },
-  { id: 'p-28', name: 'SPF 50 Sunscreen Gel',             brand: 'The Ordinary',  category: 'Health',      price: 1499,  rating: 4.5, reviewCount: 998,  image: 'https://placehold.co/260x200/fde3ef/9b59b6?text=Sunscreen' },
-  { id: 'p-29', name: 'Nourishing Hair Mask',             brand: 'Kerastase',     category: 'Beauty',      price: 2100,  originalPrice: 2600,  rating: 4,   reviewCount: 233,  image: 'https://placehold.co/260x200/ede9fe/5b21b6?text=Hair+Mask',   badge: 'SALE' },
-  { id: 'p-30', name: 'Tailored Blazer',                  brand: 'Herringbone',   category: 'Fashion',     price: 6999,  rating: 5,   reviewCount: 61,   image: 'https://placehold.co/260x200/e8d5f0/7c3aed?text=Blazer',      badge: 'NEW' },
-];
+import { useCart } from '@/context/CartContext';
+import { createClient } from '@/lib/supabase/client';
 
 const CATEGORY_FILTERS = ['All', 'Fashion', 'Beauty', 'Electronics', 'Books', 'Home', 'Sports', 'Kids', 'Health'];
 
@@ -48,62 +15,87 @@ const SORT_OPTIONS = [
   { value: 'rating-desc', label: 'Best Rated' },
   { value: 'reviews-desc',label: 'Most Reviewed' },
 ];
-
 const PAGE_SIZE = 12;
 
-// ---------------------------------------------------------------------------
-// Inner component — must be wrapped in <Suspense> because it uses
-// useSearchParams() which requires Suspense in Next.js App Router.
-// ---------------------------------------------------------------------------
 function ProductsInner() {
   const searchParams     = useSearchParams();
   const router           = useRouter();
-  const [sortBy,         setSortBy]         = useState('featured');
-  const [isSortOpen,     setIsSortOpen]     = useState(false);
-  const [visibleCount,   setVisibleCount]   = useState(PAGE_SIZE);
+  const { addToCart }    = useCart();
+  
+  const [products, setProducts]           = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [sortBy, setSortBy]               = useState('featured');
+  const [isSortOpen, setIsSortOpen]       = useState(false);
+  const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
 
-  // ── Read URL params ──────────────────────────────────────────────────────
-  // ?q=           → free-text search term coming from TopNav Enter/submit
-  // ?category=    → category filter coming from TopNav or category cards
-  // ?sort=        → pre-set sort order (e.g. "deals" promo banner)
+  useEffect(() => {
+    async function fetchProducts() {
+      setLoading(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const mappedProducts = (data || []).map((p) => ({
+          id: p.id,
+          name: p.title || p.name || 'Product',
+          title: p.title || p.name || 'Product',
+          brand: p.brand || 'Brand',
+          category: p.category || 'General',
+          price: Number(p.price) || 0,
+          originalPrice: p.original_price ? Number(p.original_price) : (p.originalPrice ? Number(p.originalPrice) : null),
+          rating: p.rating || 4.5,
+          reviewCount: p.review_count || p.reviews_count || p.reviewCount || 100,
+          image: p.image_url || p.image || (Array.isArray(p.images) && p.images[0]) || 'https://placehold.co/260x200/f3e8ff/7e22ce?text=Product',
+          badge: p.badge || (p.discount_percent ? 'SALE' : null),
+        }));
+
+        setProducts(mappedProducts);
+      } catch (err) {
+        console.error('Error fetching Supabase products:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchProducts();
+  }, []);
+
   const urlQuery    = (searchParams.get('q')        || '').trim().toLowerCase();
   const urlCategory = (searchParams.get('category') || '').trim();
   const urlSort     = (searchParams.get('sort')     || '').trim();
 
-  // Derive active category from URL; fall back to 'All'
-  const activeCategory =
-    CATEGORY_FILTERS.includes(urlCategory) ? urlCategory : 'All';
+  const activeCategory = CATEGORY_FILTERS.includes(urlCategory) ? urlCategory : 'All';
 
-  // Sync sort from URL param on first load only
   useEffect(() => {
     if (urlSort === 'deals') setSortBy('price-asc');
   }, [urlSort]);
 
-  // Reset visible count whenever filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [urlQuery, urlCategory, sortBy]);
 
-  // ── Filter + search + sort ───────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
-    let list = ALL_PRODUCTS;
+    let list = products;
 
-    // 1. Category filter
     if (activeCategory !== 'All') {
-      list = list.filter((p) => p.category === activeCategory);
+      list = list.filter((p) => p.category?.toLowerCase() === activeCategory.toLowerCase());
     }
 
-    // 2. Free-text search across name, brand, category
     if (urlQuery) {
       list = list.filter(
         (p) =>
-          p.name.toLowerCase().includes(urlQuery) ||
-          p.brand.toLowerCase().includes(urlQuery) ||
-          p.category.toLowerCase().includes(urlQuery),
+          p.name?.toLowerCase().includes(urlQuery) ||
+          p.brand?.toLowerCase().includes(urlQuery) ||
+          p.category?.toLowerCase().includes(urlQuery),
       );
     }
 
-    // 3. Sort
+    // Sort
     const sorted = [...list];
     switch (sortBy) {
       case 'price-asc':    sorted.sort((a, b) => a.price - b.price);             break;
@@ -113,13 +105,12 @@ function ProductsInner() {
       default: break;
     }
     return sorted;
-  }, [activeCategory, urlQuery, sortBy]);
+  }, [products, activeCategory, urlQuery, sortBy]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const hasMore         = visibleCount < filteredProducts.length;
   const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? 'Featured';
 
-  // Navigate to /products?category=X, keeping the search query if present
   function handleCategorySelect(category) {
     const params = new URLSearchParams();
     if (urlQuery) params.set('q', urlQuery);
@@ -133,7 +124,6 @@ function ProductsInner() {
     setIsSortOpen(false);
   }
 
-  // ── Page label ────────────────────────────────────────────────────────────
   const pageTitle = urlQuery
     ? `Results for "${urlQuery}"${activeCategory !== 'All' ? ` in ${activeCategory}` : ''}`
     : activeCategory === 'All'
@@ -202,11 +192,11 @@ function ProductsInner() {
         </div>
       </div>
 
-      {/* ── RESULTS BAR: count + sort dropdown ── */}
+      {/* ── RESULTS BAR ── */}
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4 mb-4">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow p-3 flex items-center justify-between flex-wrap gap-2 sm:gap-3">
           <span className="text-xs text-gray-500">
-            {filteredProducts.length.toLocaleString()} result{filteredProducts.length === 1 ? '' : 's'} found
+            {loading ? 'Loading products...' : `${filteredProducts.length.toLocaleString()} result${filteredProducts.length === 1 ? '' : 's'} found`}
             {urlQuery && (
               <span className="ml-1 text-purple-700 font-bold">
                 for &ldquo;{urlQuery}&rdquo;
@@ -271,16 +261,20 @@ function ProductsInner() {
         </div>
       </div>
 
-      {/* ── PRODUCT GRID ── */}
+      {/* ── PRODUCT GRID / LOADING / EMPTY STATE ── */}
       <div className="w-full max-w-screen-xl mx-auto px-3 sm:px-4">
-        {visibleProducts.length > 0 ? (
+        {loading ? (
+          <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-12 text-center">
+            <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-xs font-bold text-purple-900">Fetching live products...</p>
+          </div>
+        ) : visibleProducts.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
             {visibleProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
             ))}
           </div>
         ) : (
-          /* ── No results state ── */
           <div className="bg-white/80 backdrop-blur rounded-2xl shadow-lg p-6 sm:p-10 text-center">
             <i className="fas fa-search text-4xl text-purple-300 mb-3" />
             <p className="text-sm font-bold text-gray-700 mb-1">
@@ -299,7 +293,7 @@ function ProductsInner() {
           </div>
         )}
 
-        {hasMore && (
+        {hasMore && !loading && (
           <div className="flex justify-center mt-6">
             <button
               type="button"
@@ -314,11 +308,6 @@ function ProductsInner() {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Default export — wraps inner component in Suspense (required by Next.js
-// when useSearchParams() is used inside a Client Component).
-// ---------------------------------------------------------------------------
 export default function ProductsPage() {
   return (
     <Suspense

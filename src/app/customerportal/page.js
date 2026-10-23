@@ -1,44 +1,113 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { 
   FiBox, FiHeart, FiUser, FiMenu, FiX, FiExternalLink, 
   FiCheck, FiTrash2, FiShoppingCart, FiPlus, FiStar, 
   FiMapPin, FiGlobe, FiBell, FiLogOut
 } from 'react-icons/fi';
 
+const MILESTONES = ['Order Placed', 'Shipped', 'Customs Clearance', 'Out for Delivery', 'Delivered'];
+const formatDate = (iso) => (iso ? new Date(iso).toISOString().split('T')[0] : '');
+
 export default function CustomerPortal() {
+  const router = useRouter();
+  const supabase = createClient();
+
   // Navigation & Layout States
   const [activeTab, setActiveTab] = useState('orders');
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile drawer
   const [isCollapsed, setIsCollapsed] = useState(true); // Desktop collapse (default to collapsed)
 
-  // --- MOCK DATA STATES ---
-  const [orders] = useState([
-    {
-      id: 'ORD-7743', product: 'Rose Glow Facial Serum x2', total: 49.98,
-      tracking: 'DHL-88213940PK', courier: 'DHL Express',
-      courierUrl: '#', currentStep: 3, placedDate: '2026-07-10'
-    },
-    {
-      id: 'ORD-7801', product: 'Argan Hair Oil x1', total: 18.75,
-      tracking: 'FDX-77410823US', courier: 'FedEx International',
-      courierUrl: '#', currentStep: 1, placedDate: '2026-07-17'
-    }
-  ]);
-
-  const [wishlist, setWishlist] = useState([
-    { id: 1, name: 'Charcoal Detox Mask', price: 15.99, inStock: true },
-    { id: 2, name: 'Vitamin C Brightening Serum', price: 29.50, inStock: false },
-  ]);
-
-  const [addresses, setAddresses] = useState([
-    { id: 1, name: 'Amara K.', countryLabel: 'United States', street: '482 Maple Avenue', city: 'Austin', state: 'TX', postal: '73301', phone: '+1 512 555 0198', isDefault: true },
-    { id: 2, name: 'Amara K. (Work)', countryLabel: 'United Arab Emirates', street: 'Al Wasl Road, Villa 12', city: 'Dubai', state: 'Dubai', postal: '', phone: '+971 50 123 4567', isDefault: false }
-  ]);
-  
+  // --- DYNAMIC DATA STATES (Supabase) ---
+  const [orders, setOrders] = useState([]);
+  const [wishlist, setWishlist] = useState([]);
+  const [addresses, setAddresses] = useState([]);
   const [currency, setCurrency] = useState('USD');
+  const [displayInitial, setDisplayInitial] = useState('U');
+  const [showNotifications, setShowNotifications] = useState(false);
   const [timelineAnimated, setTimelineAnimated] = useState(false);
+
+  // --- FETCH ALL PORTAL DATA FROM SUPABASE ---
+  const fetchPortalData = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/signin/customer');
+      return;
+    }
+
+    const [ordersRes, wishlistRes, addressesRes, profileRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('id, order_number, total, tracking_number, courier_name, courier_url, current_step, placed_at, order_items(product_name, quantity)')
+        .eq('user_id', user.id)
+        .order('placed_at', { ascending: false }),
+      supabase
+        .from('wishlist')
+        .select('id, product_id, products(id, name, price, in_stock)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('full_name, display_currency')
+        .eq('id', user.id)
+        .single(),
+    ]);
+
+    if (ordersRes.data) {
+      setOrders(ordersRes.data.map((o) => ({
+        id: o.order_number,
+        product: (o.order_items || [])
+          .map((it) => `${it.product_name}${it.quantity > 1 ? ` x${it.quantity}` : ''}`)
+          .join(', '),
+        total: o.total,
+        tracking: o.tracking_number,
+        courier: o.courier_name,
+        courierUrl: o.courier_url || '#',
+        currentStep: o.current_step,
+        placedDate: formatDate(o.placed_at),
+      })));
+    }
+
+    if (wishlistRes.data) {
+      setWishlist(wishlistRes.data.map((w) => ({
+        id: w.id,
+        productId: w.product_id,
+        name: w.products?.name,
+        price: w.products?.price,
+        inStock: w.products?.in_stock,
+      })));
+    }
+
+    if (addressesRes.data) {
+      setAddresses(addressesRes.data.map((a) => ({
+        id: a.id,
+        name: a.name,
+        countryLabel: a.country_label,
+        street: a.street,
+        city: a.city,
+        state: a.state,
+        postal: a.postal,
+        phone: a.phone,
+        isDefault: a.is_default,
+      })));
+    }
+
+    const nameSource = profileRes.data?.full_name || user.email || 'U';
+    setDisplayInitial(nameSource.charAt(0).toUpperCase());
+    setCurrency(profileRes.data?.display_currency || 'USD');
+  }, [supabase, router]);
+
+  useEffect(() => {
+    fetchPortalData();
+  }, [fetchPortalData]);
 
   useEffect(() => {
     if (activeTab === 'orders') {
@@ -49,10 +118,37 @@ export default function CustomerPortal() {
     }
   }, [activeTab]);
 
+  // --- SUPABASE WRITE HANDLERS ---
+  const handleRemoveFromWishlist = async (id) => {
+    setWishlist((prev) => prev.filter((w) => w.id !== id));
+    const { error } = await supabase.from('wishlist').delete().eq('id', id);
+    if (error) fetchPortalData();
+  };
+
+  const handleAddToCart = async (productId) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !productId) return;
+    await supabase
+      .from('cart_items')
+      .upsert({ user_id: user.id, product_id: productId, quantity: 1 }, { onConflict: 'user_id,product_id' });
+  };
+
+  const handleCurrencyChange = async (value) => {
+    setCurrency(value);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('profiles').update({ display_currency: value }).eq('id', user.id);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/signin/customer');
+  };
+
 
   // --- VIEW RENDERERS ---
   const renderOrders = () => {
-    const milestones = ['Order Placed', 'Shipped', 'Customs Clearance', 'Out for Delivery', 'Delivered'];
+    const milestones = MILESTONES;
     
     return (
       <div className="space-y-6 animate-fade-in">
@@ -122,7 +218,7 @@ export default function CustomerPortal() {
               <div className="h-48 bg-slate-50 relative border-b border-slate-100">
                 <div className="w-full h-full flex items-center justify-center text-slate-300 font-medium">[Product Image]</div>
                 <button 
-                  onClick={() => setWishlist(wishlist.filter(w => w.id !== item.id))}
+                  onClick={() => handleRemoveFromWishlist(item.id)}
                   className="absolute top-3 right-3 p-2 bg-white rounded-full text-slate-400 hover:text-red-500 shadow-sm opacity-0 group-hover:opacity-100 transition-all"
                 >
                   <FiTrash2 size={18} />
@@ -133,6 +229,7 @@ export default function CustomerPortal() {
                 <p className="text-purple-700 font-bold mt-1">${item.price}</p>
                 <button 
                   disabled={!item.inStock}
+                  onClick={() => handleAddToCart(item.productId)}
                   className={`mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-sm transition-colors ${
                     item.inStock ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   }`}
@@ -148,8 +245,18 @@ export default function CustomerPortal() {
   );
 
   const renderProfile = () => {
-    const handleSetDefault = (id) => setAddresses(addresses.map(addr => ({ ...addr, isDefault: addr.id === id })));
-    const handleDelete = (id) => setAddresses(addresses.filter(addr => addr.id !== id));
+    const handleSetDefault = async (id) => {
+      setAddresses((prev) => prev.map(addr => ({ ...addr, isDefault: addr.id === id })));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from('addresses').update({ is_default: false }).eq('user_id', user.id);
+      await supabase.from('addresses').update({ is_default: true }).eq('id', id);
+    };
+    const handleDelete = async (id) => {
+      setAddresses((prev) => prev.filter(addr => addr.id !== id));
+      const { error } = await supabase.from('addresses').delete().eq('id', id);
+      if (error) fetchPortalData();
+    };
 
     return (
       <div className="space-y-8 animate-fade-in">
@@ -162,7 +269,7 @@ export default function CustomerPortal() {
             <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Display Currency</label>
             <select 
               value={currency} 
-              onChange={(e) => setCurrency(e.target.value)}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
               className="w-full sm:w-64 px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-slate-50"
             >
               <option value="USD">🇺🇸 USD - US Dollar</option>
@@ -287,6 +394,7 @@ export default function CustomerPortal() {
         {/* Logout Button */}
         <div className="p-4 border-t border-slate-100 flex-shrink-0">
            <button
+             onClick={handleLogout}
              title={isCollapsed ? "Log Out" : ""}
              className={`flex items-center gap-3 py-2.5 px-3 text-[15px] font-medium rounded-xl transition-all w-full text-left overflow-hidden text-red-500 hover:bg-red-50 hover:text-red-700 ${isCollapsed ? 'justify-center lg:px-0' : 'justify-start'}`}
            >
@@ -317,13 +425,31 @@ export default function CustomerPortal() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-5">
-            <button className="text-slate-400 hover:text-slate-600 transition-colors relative">
+          <div className="flex items-center gap-5 relative">
+            <button
+              onClick={() => setShowNotifications((prev) => !prev)}
+              className="text-slate-400 hover:text-slate-600 transition-colors relative"
+            >
               <FiBell size={20} />
               <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
             </button>
-            <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm cursor-pointer hover:bg-purple-200 transition-colors">
-              A
+            {showNotifications && (
+              <div className="absolute right-14 top-12 w-72 bg-white rounded-xl border border-slate-200 shadow-lg z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100">
+                  <p className="text-sm font-bold text-slate-900">Notifications</p>
+                </div>
+                <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                  <div className="px-4 py-6 text-center text-sm text-slate-400 font-medium">
+                    No new notifications
+                  </div>
+                </div>
+              </div>
+            )}
+            <div
+              onClick={() => router.push('/customerportal/profile')}
+              className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm cursor-pointer hover:bg-purple-200 transition-colors"
+            >
+              {displayInitial}
             </div>
           </div>
         </header>

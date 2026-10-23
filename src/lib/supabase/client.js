@@ -1,4 +1,3 @@
-// src/lib/supabase/client.js
 import { createBrowserClient } from '@supabase/ssr';
 
 export function createClient() {
@@ -7,3 +6,5 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 }
+
+export const supabase = createClient();

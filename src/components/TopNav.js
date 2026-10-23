@@ -3,11 +3,21 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-// Added missing icons from react-icons/bs + added BsX for the new popup close button
-import { BsCart, BsSearch, BsGeoAlt, BsChevronDown, BsChevronRight, BsMap, BsX } from 'react-icons/bs';
+import { 
+  BsCart, 
+  BsSearch, 
+  BsGeoAlt, 
+  BsChevronDown, 
+  BsChevronRight, 
+  BsX, 
+  BsBoxArrowRight, 
+  BsPerson,
+  BsPlusLg,
+  BsDashLg
+} from 'react-icons/bs';
 
-// 1. Yahan useCart import kiya gaya hai (Agar context folder kisi aur jagah hai toh path theek kar lijiye ga)
-import { useCart } from '../context/CartContext.js';
+import { createClient } from '@/lib/supabase/client';
+import { useCart } from '@/context/CartContext';
 
 const CATEGORIES = [
   'Arts & Crafts',
@@ -30,35 +40,197 @@ const SIGNIN_ROLES = [
   { label: 'The Affiliater', href: '/signin/affiliater' },
 ];
 
-// 2. Yahan se 'cartCount = 3' hata diya gaya hai
 export default function TopNav({ isAuthenticated = false, userName = '' }) {
-  // 3. Yahan context se live cartCount liya ja raha hai
   const { cartCount } = useCart();
-  
+  const supabase = createClient();
+  const router = useRouter();
+
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedLanguage, setSelectedLanguage] = useState('EN');
-
-  // NEW: State for the auto-appearing Sign In popup
   const [showSignInPopup, setShowSignInPopup] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  // Hydration state check
+  const [mounted, setMounted] = useState(false);
+
+  // --- Location State & Handlers ---
+  const [location, setLocation] = useState({ 
+    city: '', 
+    country: 'Pakistan', 
+    displayLabel: 'Pakistan',
+    lat: null,
+    lng: null
+  });
+  const [isLocOpen, setIsLocOpen] = useState(false);
+  const [locLoading, setLocLoading] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(15); // Map Zoom Level State
+  const locModalRef = useRef(null);
 
   const navRef = useRef(null);
-  const router = useRouter();
 
-  // NEW: Effect to show the popup on very first load for 20 seconds
   useEffect(() => {
-    // Only show if the user is not authenticated
+    setMounted(true);
+  }, []);
+
+  // Auto-detect location on load / check localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('criticpick_user_location');
+    if (saved) {
+      try { 
+        setLocation(JSON.parse(saved)); 
+      } catch (e) { 
+        fetchIPLocation(); 
+      }
+    } else {
+      fetchIPLocation();
+    }
+  }, []);
+
+  // Close location modal on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (locModalRef.current && !locModalRef.current.contains(e.target)) {
+        setIsLocOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Helper to extract detailed Area + City + Country from OpenStreetMap
+  const formatDetailedAddress = (address) => {
+    const area = 
+      address?.suburb || 
+      address?.neighbourhood || 
+      address?.quarter || 
+      address?.residential || 
+      address?.road || 
+      address?.district || 
+      '';
+
+    const city = 
+      address?.city || 
+      address?.town || 
+      address?.village || 
+      address?.municipality || 
+      address?.county || 
+      '';
+
+    const country = address?.country || '';
+
+    const shortLabel = [area, city].filter(Boolean).join(', ') || city || country;
+    const fullLabel = [area, city, country].filter(Boolean).join(', ');
+
+    return { area, city, country, shortLabel, fullLabel };
+  };
+
+  // IP Location Fetch (Includes Coordinates for Map Embed)
+  const fetchIPLocation = async () => {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+      if (data && data.country_name) {
+        const city = data.city || '';
+        const region = data.region || '';
+        const country = data.country_name;
+
+        const locData = {
+          area: region,
+          city: city,
+          country: country,
+          displayLabel: city ? `${city}, ${country}` : country,
+          lat: data.latitude || null,
+          lng: data.longitude || null,
+        };
+
+        setLocation(locData);
+        localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
+      }
+    } catch (err) {
+      console.error('IP Geolocation failed:', err);
+    }
+  };
+
+  // Precise GPS Location Handler (Area + City + Pinpoint Coordinates)
+  const handlePreciseLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setLocLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const data = await res.json();
+
+          if (data && data.address) {
+            const parsed = formatDetailedAddress(data.address);
+
+            const locData = {
+              area: parsed.area,
+              city: parsed.city,
+              country: parsed.country,
+              displayLabel: parsed.shortLabel,
+              lat: latitude,
+              lng: longitude,
+              isPrecise: true,
+            };
+
+            setLocation(locData);
+            setZoomLevel(16); // Reset zoom to detailed street level on precise lock
+            localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
+            setIsLocOpen(false);
+          }
+        } catch (err) {
+          alert('Could not resolve GPS location.');
+        } finally {
+          setLocLoading(false);
+        }
+      },
+      () => {
+        setLocLoading(false);
+        alert('Location permission denied.');
+      }
+    );
+  };
+
+  // Zoom Handlers
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 1, 20));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 1, 1));
+
+  // Logout Handler Function
+  async function handleLogout() {
+    try {
+      setIsLoggingOut(true);
+      closeAll();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      router.push('/signin/customer');
+      router.refresh();
+    } catch (err) {
+      console.error('Logout Error:', err.message);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
+  useEffect(() => {
     if (!isAuthenticated) {
-      // Check session storage so it truly only shows on the "first load" of the session
       const hasSeenPopup = sessionStorage.getItem('hasSeenSignInPopup');
       
       if (!hasSeenPopup) {
         setShowSignInPopup(true);
         sessionStorage.setItem('hasSeenSignInPopup', 'true');
         
-        // Auto-hide after 20 seconds
         const timer = setTimeout(() => {
           setShowSignInPopup(false);
         }, 20000);
@@ -68,7 +240,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   }, [isAuthenticated]);
 
-  // NEW: Effect to hide the popup if the user manually opens the Account dropdown
   useEffect(() => {
     if (openDropdown === 'account') {
       setShowSignInPopup(false);
@@ -83,11 +254,10 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
   const closeAll = () => {
     setOpenDropdown(null);
     setIsSubMenuOpen(false);
-    // NEW: Close popup when clicking outside as well
     setShowSignInPopup(false);
+    setIsLocOpen(false);
   };
 
-  // Close any open dropdown when the user clicks outside the nav.
   useEffect(() => {
     function handleClickOutside(event) {
       if (navRef.current && !navRef.current.contains(event.target)) {
@@ -98,7 +268,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close dropdowns on Escape for keyboard accessibility.
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === 'Escape') closeAll();
@@ -107,9 +276,8 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
-  // Form submit handling for search
   function handleSearchSubmit(event) {
-    event.preventDefault(); // Prevents page reload
+    event.preventDefault();
     const params = new URLSearchParams();
     
     if (searchQuery.trim()) {
@@ -131,8 +299,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     
     switch (category) {
       case 'All':
-        router.push(`/products${queryParam}`);
-        break;
       case 'Arts & Crafts':
       case 'Beauty & Personal Care':
       case 'Health & Household':
@@ -149,6 +315,11 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   }
 
+  // Dynamic Map Embed URL incorporating live zoom state
+  const mapEmbedUrl = location.lat && location.lng
+    ? `https://maps.google.com/maps?q=${location.lat},${location.lng}&z=${zoomLevel}&output=embed`
+    : `https://maps.google.com/maps?q=${encodeURIComponent(location.displayLabel || location.country)}&z=${zoomLevel}&output=embed`;
+
   return (
     <nav
       ref={navRef}
@@ -163,33 +334,77 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
         <span className="text-lg sm:text-xl font-bold italic">Criticpick</span>
       </Link>
 
-      {/* Deliver-to location picker */}
-      <div className="hidden md:block relative">
+      {/* Live Location Widget */}
+      <div className="relative inline-block" ref={locModalRef}>
+        {/* Trigger Button */}
         <button
           type="button"
-          onClick={() => toggleDropdown('delivery')}
-          className="flex flex-col border border-transparent hover:border-white p-1 cursor-pointer text-left"
+          onClick={() => setIsLocOpen(!isLocOpen)}
+          className="flex items-center gap-1.5 border border-gray-400 rounded px-2.5 py-1 text-white hover:bg-white/10 transition"
         >
-          <span className="text-xs text-gray-400">Deliver to</span>
-          <span className="text-sm font-bold flex items-center">
-            {/* Updated Icon */}
-            <BsGeoAlt className="mr-1" /> Pakistan
-          </span>
+          <BsGeoAlt className="text-white text-sm shrink-0" />
+          <div className="flex flex-col text-left">
+            <span className="text-[10px] leading-tight text-gray-300">Deliver to</span>
+            <span className="text-xs font-bold leading-tight truncate max-w-[130px]">
+              {location.displayLabel || (location.city ? `${location.city}, ${location.country}` : location.country)}
+            </span>
+          </div>
         </button>
 
-        {openDropdown === 'delivery' && (
-          <div className="absolute top-full left-0 bg-white text-black p-4 rounded shadow-2xl w-64 z-[100] mt-1 border border-gray-200">
-            <p className="font-bold text-sm mb-2">Select your live location</p>
-            <div className="bg-gray-100 h-24 rounded mb-2 flex items-center justify-center text-gray-400">
-              {/* Updated Icon */}
-              <BsMap className="text-2xl" />
+        {/* Live Location Dropdown Modal */}
+        {isLocOpen && (
+          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 z-50 text-black">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-xs font-bold text-gray-800">Select your live location</h3>
+              <button 
+                type="button"
+                onClick={() => setIsLocOpen(false)} 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <BsX className="text-xl" />
+              </button>
             </div>
+
+            {/* Live Interactive Google Map with Zoom Controls */}
+            <div className="relative w-full h-36 rounded-lg overflow-hidden mb-3 border border-gray-200 bg-gray-100 shadow-inner">
+              <iframe
+                title="Live Google Map"
+                src={mapEmbedUrl}
+                width="100%"
+                height="100%"
+                className="w-full h-full border-0"
+                loading="lazy"
+              />
+
+              {/* Overlay Zoom Buttons (+ / -) */}
+              <div className="absolute bottom-2 right-2 flex flex-col gap-1 bg-white/95 backdrop-blur rounded shadow-md border border-gray-200 p-0.5 z-10">
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="w-6 h-6 flex items-center justify-center bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 font-bold rounded text-xs transition border-b border-gray-100"
+                  title="Zoom In"
+                >
+                  <BsPlusLg className="text-[10px]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="w-6 h-6 flex items-center justify-center bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 font-bold rounded text-xs transition"
+                  title="Zoom Out"
+                >
+                  <BsDashLg className="text-[10px]" />
+                </button>
+              </div>
+            </div>
+
+            {/* Purple Action Button */}
             <button
               type="button"
-              onClick={closeAll}
-              className="w-full bg-purple-600 hover:bg-purple-700 transition text-white py-1 rounded text-xs font-bold"
+              onClick={handlePreciseLocation}
+              disabled={locLoading}
+              className="w-full bg-[#8b5cf6] hover:bg-[#7c3aed] disabled:bg-purple-300 text-white font-semibold text-xs py-2 px-3 rounded transition"
             >
-              Use Precise Location
+              {locLoading ? 'Detecting Location...' : 'Use Precise Location'}
             </button>
           </div>
         )}
@@ -209,7 +424,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
             aria-expanded={openDropdown === 'category'}
           >
             {selectedCategory}
-            {/* Updated Icon */}
             <BsChevronDown className="text-xs" />
           </button>
 
@@ -231,7 +445,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                 </li>
               ))}
 
-              {/* Flyout Sub-category logic */}
               <li
                 className="px-4 py-2 hover:bg-purple-100 cursor-pointer relative flex justify-between items-center font-bold text-sm"
                 onMouseEnter={() => setIsSubMenuOpen(true)}
@@ -245,7 +458,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                 >
                   Category
                 </span>
-                {/* Updated Icon */}
                 <BsChevronRight className="text-xs" />
 
                 {isSubMenuOpen && (
@@ -279,7 +491,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           className="bg-purple-600 hover:bg-purple-700 text-white px-4 rounded-r transition shrink-0 cursor-pointer flex items-center justify-center"
           aria-label="Submit search"
         >
-          {/* Updated Icon for Search */}
           <BsSearch className="text-[16px]" />
         </button>
       </form>
@@ -300,7 +511,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
               alt={selectedLanguage}
             />
             {selectedLanguage}
-            {/* Updated Icon */}
             <BsChevronDown className="text-xs" />
           </button>
 
@@ -323,6 +533,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           )}
         </div>
 
+        {/* Account Menu */}
         <div className="relative">
           <button
             type="button"
@@ -332,47 +543,68 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
             aria-expanded={openDropdown === 'account'}
           >
             <span className="hidden sm:block text-xs text-gray-400">
-              {isAuthenticated ? `Hello, ${userName || 'there'}` : 'Hello, sign in'}
+              {isAuthenticated ? `Hello, ${userName || 'User'}` : 'Hello, sign in'}
             </span>
             <span className="text-xs sm:text-sm font-bold flex items-center gap-1 whitespace-nowrap">
               <span className="hidden sm:inline">Account &amp; Lists</span>
               <span className="sm:hidden">Account</span>
-              {/* Updated Icon */}
               <BsChevronDown className="text-gray-400 text-xs" />
             </span>
           </button>
 
-          {/* Existing Account Dropdown */}
+          {/* Account Dropdown */}
           {openDropdown === 'account' && (
-            <div className="absolute top-full right-0 bg-white text-black p-4 w-60 max-w-[calc(100vw-1.5rem)] shadow-2xl z-[100] mt-1 border-t-4 border-purple-600">
-              <p className="font-bold text-sm mb-3 border-b pb-1">Choose Role to Login</p>
-              <div className="space-y-2">
-                {SIGNIN_ROLES.map((role) => (
-                  <Link
-                    key={role.href}
-                    href={role.href}
-                    onClick={closeAll}
-                    className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
-                  >
-                    {/* Updated Icon */}
-                    <BsChevronRight className="text-[10px]" /> {role.label}
-                  </Link>
-                ))}
-              </div>
+            <div className="absolute top-full right-0 bg-white text-black p-4 w-60 max-w-[calc(100vw-1.5rem)] shadow-2xl z-[100] mt-1 border-t-4 border-purple-600 rounded-b">
+              {isAuthenticated ? (
+                <div>
+                  <p className="font-bold text-sm mb-3 border-b pb-1 text-purple-900">Your Account</p>
+                  <div className="space-y-2">
+                    <Link
+                      href="/profile"
+                      onClick={closeAll}
+                      className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
+                    >
+                      <BsPerson className="text-sm" /> Profile &amp; Orders
+                    </Link>
+                    
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="w-full text-left flex items-center gap-2 text-xs text-red-600 hover:text-red-800 transition font-semibold pt-2 border-t border-gray-100 cursor-pointer disabled:opacity-50"
+                    >
+                      <BsBoxArrowRight className="text-sm" />
+                      {isLoggingOut ? 'Logging out...' : 'Sign Out'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-bold text-sm mb-3 border-b pb-1">Choose Role to Login</p>
+                  <div className="space-y-2">
+                    {SIGNIN_ROLES.map((role) => (
+                      <Link
+                        key={role.href}
+                        href={role.href}
+                        onClick={closeAll}
+                        className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
+                      >
+                        <BsChevronRight className="text-[10px]" /> {role.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* NEW: Auto-Appearing Amazon-Style Sign In Popup */}
+          {/* Auto-Appearing Sign In Popup for Unauthenticated Users */}
           {showSignInPopup && !isAuthenticated && (
             <div className="absolute top-full right-0 bg-white text-black p-4 w-[240px] shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-md z-[110] mt-2 border border-gray-200 transition-opacity duration-300">
-              
-              {/* Outer Triangle Arrow Border */}
               <div className="absolute -top-[9px] right-6 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[9px] border-b-gray-200">
-                {/* Inner White Triangle */}
                 <div className="absolute -top-[8px] -left-[8px] w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white"></div>
               </div>
               
-              {/* Close Button */}
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowSignInPopup(false); }}
                 className="absolute top-1 right-2 text-gray-400 hover:text-black cursor-pointer p-1 rounded-sm focus:outline-none"
@@ -392,7 +624,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                 <p className="text-[11px] mt-2 text-gray-700 font-medium">
                   New customer?{' '}
                   <Link 
-                    href="/signup"
+                    href="/signup/customer"
                     onClick={() => setShowSignInPopup(false)}
                     className="text-blue-600 hover:text-orange-600 hover:underline"
                   >
@@ -404,15 +636,15 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           )}
         </div>
 
+        {/* Standalone Nav Logout / Sign In Button */}
         {isAuthenticated ? (
           <button
             type="button"
-            onClick={() => {
-              closeAll();
-            }}
-            className="text-sm font-bold border border-transparent hover:border-white p-2 cursor-pointer"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="text-sm font-bold border border-transparent hover:border-white p-2 cursor-pointer disabled:opacity-50"
           >
-            Logout
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
           </button>
         ) : (
           <Link
@@ -424,19 +656,19 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           </Link>
         )}
 
-        {/* Cart Link using BsCart */}
+        {/* Cart Link with Hydrated Badge Count */}
         <Link
           href="/cart"
           onClick={closeAll}
           className="relative flex items-center border border-transparent hover:border-white p-2 cursor-pointer"
         >
           <span className="relative">
-            {cartCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-purple-600 text-[10px] rounded-full h-4 w-4 flex items-center justify-center font-bold">
+            <BsCart className="text-xl" />
+            {mounted && cartCount > 0 && (
+              <span className="absolute -top-2 -right-2.5 bg-purple-600 text-white text-[10px] rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center font-bold">
                 {cartCount}
               </span>
             )}
-            <BsCart className="text-xl" />
           </span>
           <span className="ml-2 font-bold uppercase tracking-tight hidden sm:inline">Cart</span>
         </Link>

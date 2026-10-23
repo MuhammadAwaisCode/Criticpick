@@ -1,9 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import {
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  ArrowLeft,
+  ShieldCheck,
+} from 'lucide-react';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -11,9 +22,25 @@ export default function ResetPasswordPage() {
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+
+  // Check if active recovery session exists
+  useEffect(() => {
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace('/forgot-password');
+      } else {
+        setIsCheckingSession(false);
+      }
+    }
+    checkSession();
+  }, [router, supabase]);
 
   function validate() {
     if (!password) {
@@ -41,122 +68,168 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      // Supabase authenticated session update password call
+      // Supabase authenticated session password update
       const { error: updateError } = await supabase.auth.updateUser({
         password: password,
       });
 
-      if (updateError) {
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
       setSuccessMessage('Your password has been reset successfully! Redirecting to login...');
 
-      // 2 seconds delay ke baad user ko signin page par bhej dein
+      // Clear recovery session before sending to sign-in
+      await supabase.auth.signOut();
+
       setTimeout(() => {
         router.push('/signin/customer');
       }, 2000);
     } catch (err) {
-      setError(err.message || 'Failed to reset password. Please try again or request a new link.');
+      console.error('Reset Password Error:', err);
+      setError(err.message || 'Failed to reset password. Please try again or request a new OTP.');
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  if (isCheckingSession) {
+    return (
+      <div className="bg-[linear-gradient(135deg,_#f1e1e6_0%,_#d1a3c7_50%,_#7a6fb0_100%)] min-h-[calc(100vh-120px)] flex items-center justify-center px-4 py-8 w-full">
+        <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-[380px] border border-purple-200 flex flex-col items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 text-purple-700 animate-spin mb-2" />
+          <p className="text-xs text-purple-900 font-medium">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-[linear-gradient(135deg,_#f1e1e6_0%,_#d1a3c7_50%,_#7a6fb0_100%)] min-h-screen flex items-center justify-center px-4 py-10 sm:py-12">
-      <div className="bg-white p-6 sm:p-8 rounded-lg shadow-2xl w-full max-w-sm sm:max-w-md border-2 border-purple-300 my-8">
+    <div className="bg-[linear-gradient(135deg,_#f1e1e6_0%,_#d1a3c7_50%,_#7a6fb0_100%)] min-h-[calc(100vh-120px)] flex items-center justify-center px-4 py-8 w-full">
+      
+      {/* Compact Card Container */}
+      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-[380px] border border-purple-200 my-4">
         
-        {/* Key Icon */}
-        <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 rounded-full bg-purple-100 border-4 border-purple-300 flex items-center justify-center text-purple-700 text-3xl shadow-inner">
-            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+        {/* Header Icon */}
+        <div className="flex flex-col items-center mb-2">
+          <div className="w-14 h-14 rounded-full bg-purple-50 border-2 border-purple-200 flex items-center justify-center text-purple-700 shadow-inner mb-2">
+            <KeyRound className="w-6 h-6 text-purple-700" />
           </div>
         </div>
 
-        <h2 className="text-2xl font-bold text-center text-purple-900 mb-2">Set New Password</h2>
-        <p className="text-sm text-purple-700 text-center mb-6">
+        <h2 className="text-xl font-bold text-center text-purple-950">Set New Password</h2>
+        <p className="text-[11px] text-purple-600 text-center mb-4 leading-relaxed">
           Your new password must be different from previously used passwords.
         </p>
 
+        {/* Error Alert Box */}
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 text-xs rounded-md text-center">
-            {error}
+          <div className="mb-3 p-2.5 bg-red-50 border border-red-300 text-red-700 text-xs rounded-lg flex items-start gap-2 shadow-sm">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <span className="leading-snug font-medium">{error}</span>
           </div>
         )}
 
+        {/* Success Alert Box */}
         {successMessage && (
-          <div className="mb-4 p-3 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs rounded-md text-center font-medium">
-            {successMessage}
+          <div className="mb-3 p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded-lg flex items-start gap-2 shadow-sm">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <span className="leading-snug font-medium">{successMessage}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} noValidate>
+          
           {/* New Password Input */}
-          <div className="mb-4">
-            <label htmlFor="password" className="block text-xs font-semibold text-purple-900 uppercase mb-2">
+          <div className="mb-3">
+            <label htmlFor="password" className="block text-[11px] font-semibold text-purple-900 mb-1">
               New Password
             </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (error) setError('');
-              }}
-              placeholder="At least 6 characters"
-              disabled={isSubmitting || Boolean(successMessage)}
-              className="w-full p-3 border-2 border-purple-200 rounded-md text-purple-900 placeholder-purple-400 focus:outline-none focus:border-purple-500 transition-all disabled:bg-gray-100"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-400">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="At least 6 characters"
+                disabled={isSubmitting || Boolean(successMessage)}
+                className="w-full pl-9 pr-9 py-2 text-xs border border-purple-200 rounded-lg text-purple-950 placeholder-purple-300 focus:outline-none focus:border-purple-600 transition-all disabled:bg-gray-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-purple-400 hover:text-purple-700 transition"
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
 
           {/* Confirm New Password Input */}
-          <div className="mb-6">
-            <label htmlFor="confirmPassword" className="block text-xs font-semibold text-purple-900 uppercase mb-2">
+          <div className="mb-5">
+            <label htmlFor="confirmPassword" className="block text-[11px] font-semibold text-purple-900 mb-1">
               Confirm New Password
             </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (error) setError('');
-              }}
-              placeholder="Re-enter new password"
-              disabled={isSubmitting || Boolean(successMessage)}
-              className="w-full p-3 border-2 border-purple-200 rounded-md text-purple-900 placeholder-purple-400 focus:outline-none focus:border-purple-500 transition-all disabled:bg-gray-100"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-400">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                id="confirmPassword"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Re-enter new password"
+                disabled={isSubmitting || Boolean(successMessage)}
+                className="w-full pl-9 pr-9 py-2 text-xs border border-purple-200 rounded-lg text-purple-950 placeholder-purple-300 focus:outline-none focus:border-purple-600 transition-all disabled:bg-gray-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-purple-400 hover:text-purple-700 transition"
+              >
+                {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
 
+          {/* Reset Password Button */}
           <button
             type="submit"
             disabled={isSubmitting || Boolean(successMessage)}
-            className="w-full bg-purple-700 text-white p-3 rounded-md hover:bg-purple-800 transition font-semibold border-2 border-purple-700 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+            className="w-full bg-purple-700 text-white py-2.5 px-4 rounded-lg hover:bg-purple-800 transition-all font-semibold shadow-sm border border-purple-700 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
             {isSubmitting ? (
               <>
-                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Updating Password...</span>
               </>
             ) : (
-              'Reset Password'
+              <>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Reset Password</span>
+              </>
             )}
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-purple-100 text-center">
+        {/* Back to Login */}
+        <div className="mt-5 pt-3 border-t border-purple-100 text-center">
           <Link 
             href="/signin/customer" 
-            className="text-sm font-semibold text-purple-800 hover:text-purple-950 hover:underline inline-flex items-center gap-2 transition"
+            className="text-[11px] font-semibold text-purple-800 hover:text-purple-950 hover:underline inline-flex items-center gap-1.5 transition"
           >
-            <span>&larr;</span> Back to Login
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Login</span>
           </Link>
         </div>
 
