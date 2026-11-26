@@ -3,11 +3,20 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-// Added missing icons from react-icons/bs + added BsX for the new popup close button
-import { BsCart, BsSearch, BsGeoAlt, BsChevronDown, BsChevronRight, BsMap, BsX } from 'react-icons/bs';
+import { 
+  BsCart, 
+  BsSearch, 
+  BsGeoAlt, 
+  BsChevronDown, 
+  BsChevronRight, 
+  BsMap, 
+  BsX, 
+  BsBoxArrowRight, 
+  BsPerson 
+} from 'react-icons/bs';
 
-// 1. Yahan useCart import kiya gaya hai (Agar context folder kisi aur jagah hai toh path theek kar lijiye ga)
-import { useCart } from '../context/CartContext.js';
+import { createClient } from '@/lib/supabase/client';
+import { useCart } from '@/context/CartContext'; // Path updated for consistency
 
 const CATEGORIES = [
   'Arts & Crafts',
@@ -30,35 +39,53 @@ const SIGNIN_ROLES = [
   { label: 'The Affiliater', href: '/signin/affiliater' },
 ];
 
-// 2. Yahan se 'cartCount = 3' hata diya gaya hai
 export default function TopNav({ isAuthenticated = false, userName = '' }) {
-  // 3. Yahan context se live cartCount liya ja raha hai
   const { cartCount } = useCart();
-  
+  const supabase = createClient();
+  const router = useRouter();
+
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedLanguage, setSelectedLanguage] = useState('EN');
-
-  // NEW: State for the auto-appearing Sign In popup
   const [showSignInPopup, setShowSignInPopup] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  // Hydration state check (Prevents Next.js SSR mismatch)
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const navRef = useRef(null);
-  const router = useRouter();
 
-  // NEW: Effect to show the popup on very first load for 20 seconds
+  // Logout Handler Function
+  async function handleLogout() {
+    try {
+      setIsLoggingOut(true);
+      closeAll();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      router.push('/signin/customer');
+      router.refresh();
+    } catch (err) {
+      console.error('Logout Error:', err.message);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
   useEffect(() => {
-    // Only show if the user is not authenticated
     if (!isAuthenticated) {
-      // Check session storage so it truly only shows on the "first load" of the session
       const hasSeenPopup = sessionStorage.getItem('hasSeenSignInPopup');
       
       if (!hasSeenPopup) {
         setShowSignInPopup(true);
         sessionStorage.setItem('hasSeenSignInPopup', 'true');
         
-        // Auto-hide after 20 seconds
         const timer = setTimeout(() => {
           setShowSignInPopup(false);
         }, 20000);
@@ -68,7 +95,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   }, [isAuthenticated]);
 
-  // NEW: Effect to hide the popup if the user manually opens the Account dropdown
   useEffect(() => {
     if (openDropdown === 'account') {
       setShowSignInPopup(false);
@@ -83,11 +109,9 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
   const closeAll = () => {
     setOpenDropdown(null);
     setIsSubMenuOpen(false);
-    // NEW: Close popup when clicking outside as well
     setShowSignInPopup(false);
   };
 
-  // Close any open dropdown when the user clicks outside the nav.
   useEffect(() => {
     function handleClickOutside(event) {
       if (navRef.current && !navRef.current.contains(event.target)) {
@@ -98,7 +122,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close dropdowns on Escape for keyboard accessibility.
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === 'Escape') closeAll();
@@ -107,9 +130,8 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
-  // Form submit handling for search
   function handleSearchSubmit(event) {
-    event.preventDefault(); // Prevents page reload
+    event.preventDefault();
     const params = new URLSearchParams();
     
     if (searchQuery.trim()) {
@@ -131,8 +153,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     
     switch (category) {
       case 'All':
-        router.push(`/products${queryParam}`);
-        break;
       case 'Arts & Crafts':
       case 'Beauty & Personal Care':
       case 'Health & Household':
@@ -172,7 +192,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
         >
           <span className="text-xs text-gray-400">Deliver to</span>
           <span className="text-sm font-bold flex items-center">
-            {/* Updated Icon */}
             <BsGeoAlt className="mr-1" /> Pakistan
           </span>
         </button>
@@ -181,7 +200,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           <div className="absolute top-full left-0 bg-white text-black p-4 rounded shadow-2xl w-64 z-[100] mt-1 border border-gray-200">
             <p className="font-bold text-sm mb-2">Select your live location</p>
             <div className="bg-gray-100 h-24 rounded mb-2 flex items-center justify-center text-gray-400">
-              {/* Updated Icon */}
               <BsMap className="text-2xl" />
             </div>
             <button
@@ -209,7 +227,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
             aria-expanded={openDropdown === 'category'}
           >
             {selectedCategory}
-            {/* Updated Icon */}
             <BsChevronDown className="text-xs" />
           </button>
 
@@ -231,7 +248,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                 </li>
               ))}
 
-              {/* Flyout Sub-category logic */}
               <li
                 className="px-4 py-2 hover:bg-purple-100 cursor-pointer relative flex justify-between items-center font-bold text-sm"
                 onMouseEnter={() => setIsSubMenuOpen(true)}
@@ -245,7 +261,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                 >
                   Category
                 </span>
-                {/* Updated Icon */}
                 <BsChevronRight className="text-xs" />
 
                 {isSubMenuOpen && (
@@ -279,7 +294,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           className="bg-purple-600 hover:bg-purple-700 text-white px-4 rounded-r transition shrink-0 cursor-pointer flex items-center justify-center"
           aria-label="Submit search"
         >
-          {/* Updated Icon for Search */}
           <BsSearch className="text-[16px]" />
         </button>
       </form>
@@ -300,7 +314,6 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
               alt={selectedLanguage}
             />
             {selectedLanguage}
-            {/* Updated Icon */}
             <BsChevronDown className="text-xs" />
           </button>
 
@@ -323,6 +336,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           )}
         </div>
 
+        {/* Account Menu */}
         <div className="relative">
           <button
             type="button"
@@ -332,47 +346,68 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
             aria-expanded={openDropdown === 'account'}
           >
             <span className="hidden sm:block text-xs text-gray-400">
-              {isAuthenticated ? `Hello, ${userName || 'there'}` : 'Hello, sign in'}
+              {isAuthenticated ? `Hello, ${userName || 'User'}` : 'Hello, sign in'}
             </span>
             <span className="text-xs sm:text-sm font-bold flex items-center gap-1 whitespace-nowrap">
               <span className="hidden sm:inline">Account &amp; Lists</span>
               <span className="sm:hidden">Account</span>
-              {/* Updated Icon */}
               <BsChevronDown className="text-gray-400 text-xs" />
             </span>
           </button>
 
-          {/* Existing Account Dropdown */}
+          {/* Account Dropdown */}
           {openDropdown === 'account' && (
-            <div className="absolute top-full right-0 bg-white text-black p-4 w-60 max-w-[calc(100vw-1.5rem)] shadow-2xl z-[100] mt-1 border-t-4 border-purple-600">
-              <p className="font-bold text-sm mb-3 border-b pb-1">Choose Role to Login</p>
-              <div className="space-y-2">
-                {SIGNIN_ROLES.map((role) => (
-                  <Link
-                    key={role.href}
-                    href={role.href}
-                    onClick={closeAll}
-                    className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
-                  >
-                    {/* Updated Icon */}
-                    <BsChevronRight className="text-[10px]" /> {role.label}
-                  </Link>
-                ))}
-              </div>
+            <div className="absolute top-full right-0 bg-white text-black p-4 w-60 max-w-[calc(100vw-1.5rem)] shadow-2xl z-[100] mt-1 border-t-4 border-purple-600 rounded-b">
+              {isAuthenticated ? (
+                <div>
+                  <p className="font-bold text-sm mb-3 border-b pb-1 text-purple-900">Your Account</p>
+                  <div className="space-y-2">
+                    <Link
+                      href="/profile"
+                      onClick={closeAll}
+                      className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
+                    >
+                      <BsPerson className="text-sm" /> Profile & Orders
+                    </Link>
+                    
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="w-full text-left flex items-center gap-2 text-xs text-red-600 hover:text-red-800 transition font-semibold pt-2 border-t border-gray-100 cursor-pointer disabled:opacity-50"
+                    >
+                      <BsBoxArrowRight className="text-sm" />
+                      {isLoggingOut ? 'Logging out...' : 'Sign Out'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-bold text-sm mb-3 border-b pb-1">Choose Role to Login</p>
+                  <div className="space-y-2">
+                    {SIGNIN_ROLES.map((role) => (
+                      <Link
+                        key={role.href}
+                        href={role.href}
+                        onClick={closeAll}
+                        className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
+                      >
+                        <BsChevronRight className="text-[10px]" /> {role.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* NEW: Auto-Appearing Amazon-Style Sign In Popup */}
+          {/* Auto-Appearing Sign In Popup for Unauthenticated Users */}
           {showSignInPopup && !isAuthenticated && (
             <div className="absolute top-full right-0 bg-white text-black p-4 w-[240px] shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-md z-[110] mt-2 border border-gray-200 transition-opacity duration-300">
-              
-              {/* Outer Triangle Arrow Border */}
               <div className="absolute -top-[9px] right-6 w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[9px] border-b-gray-200">
-                {/* Inner White Triangle */}
                 <div className="absolute -top-[8px] -left-[8px] w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white"></div>
               </div>
               
-              {/* Close Button */}
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowSignInPopup(false); }}
                 className="absolute top-1 right-2 text-gray-400 hover:text-black cursor-pointer p-1 rounded-sm focus:outline-none"
@@ -392,7 +427,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                 <p className="text-[11px] mt-2 text-gray-700 font-medium">
                   New customer?{' '}
                   <Link 
-                    href="/signup"
+                    href="/signup/customer"
                     onClick={() => setShowSignInPopup(false)}
                     className="text-blue-600 hover:text-orange-600 hover:underline"
                   >
@@ -404,15 +439,15 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           )}
         </div>
 
+        {/* Standalone Nav Logout / Sign In Button */}
         {isAuthenticated ? (
           <button
             type="button"
-            onClick={() => {
-              closeAll();
-            }}
-            className="text-sm font-bold border border-transparent hover:border-white p-2 cursor-pointer"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="text-sm font-bold border border-transparent hover:border-white p-2 cursor-pointer disabled:opacity-50"
           >
-            Logout
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
           </button>
         ) : (
           <Link
@@ -424,19 +459,19 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           </Link>
         )}
 
-        {/* Cart Link using BsCart */}
+        {/* Cart Link with Hydrated Badge Count */}
         <Link
           href="/cart"
           onClick={closeAll}
           className="relative flex items-center border border-transparent hover:border-white p-2 cursor-pointer"
         >
           <span className="relative">
-            {cartCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-purple-600 text-[10px] rounded-full h-4 w-4 flex items-center justify-center font-bold">
+            <BsCart className="text-xl" />
+            {mounted && cartCount > 0 && (
+              <span className="absolute -top-2 -right-2.5 bg-purple-600 text-white text-[10px] rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center font-bold">
                 {cartCount}
               </span>
             )}
-            <BsCart className="text-xl" />
           </span>
           <span className="ml-2 font-bold uppercase tracking-tight hidden sm:inline">Cart</span>
         </Link>

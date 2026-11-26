@@ -1,67 +1,60 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import {
+  User,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertCircle,
+  ShoppingBag,
+  LogIn,
+} from 'lucide-react';
 
 export default function CustomerSignIn() {
   const router = useRouter();
   const supabase = createClient();
 
+  // State Management
   const [formValues, setFormValues] = useState({ identifier: '', password: '' });
   const [errors, setErrors] = useState({});
   const [authError, setAuthError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  
-  const [avatarImage, setAvatarImage] = useState(null);
+
+  // UI States
+  const [showPassword, setShowPassword] = useState(false);
   const [avatarLetter, setAvatarLetter] = useState('?');
 
   function handleFieldChange(field, value) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
     setAuthError('');
+
+    if (field === 'identifier') {
+      const trimmed = value.trim();
+      setAvatarLetter(trimmed ? trimmed.charAt(0).toUpperCase() : '?');
+    }
   }
-
-  const handleEmailBlur = () => {
-    const trimmed = formValues.identifier.trim();
-    if (trimmed && !avatarImage) {
-      setAvatarLetter(trimmed.charAt(0).toUpperCase());
-    } else if (!trimmed && !avatarImage) {
-      setAvatarLetter('?');
-    }
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setAvatarImage(url);
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (avatarImage && avatarImage.startsWith('blob:')) {
-        URL.revokeObjectURL(avatarImage);
-      }
-    };
-  }, [avatarImage]);
 
   function validate() {
     const nextErrors = {};
     if (!formValues.identifier.trim()) {
       nextErrors.identifier = 'Please enter your email or username';
     }
-    if (!formValues.password.trim()) {
+    if (!formValues.password) {
       nextErrors.password = 'Password is required';
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
 
-  // Real Supabase Email & Password Sign-In
+  // Supabase Form Submission Handler
   async function handleSubmit(event) {
     event.preventDefault();
     if (!validate()) return;
@@ -70,147 +63,233 @@ export default function CustomerSignIn() {
     setAuthError('');
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: formValues.identifier.trim(),
+      let emailToSubmit = formValues.identifier.trim();
+
+      // Step 1: Resolve Username if Email format is not provided
+      if (!emailToSubmit.includes('@')) {
+        const { data: userData, error: usernameError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', emailToSubmit)
+          .maybeSingle();
+
+        if (usernameError || !userData?.email) {
+          throw new Error('Username not found. Please enter a valid email address.');
+        }
+        emailToSubmit = userData.email;
+      }
+
+      // Step 2: Authenticate User with Password
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailToSubmit.toLowerCase(),
         password: formValues.password,
       });
 
       if (error) throw error;
 
+      const user = data?.user;
+
+      // Step 3: Verify Role & Status from Profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, status')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const accountStatus = profile?.status || user?.user_metadata?.status;
+      const accountRole = profile?.role || user?.user_metadata?.role;
+
+      if (accountRole && accountRole !== 'customer') {
+        await supabase.auth.signOut();
+        throw new Error('Access denied. Please use the appropriate portal for your account type.');
+      }
+
+      if (accountStatus === 'blocked' || accountStatus === 'suspended') {
+        await supabase.auth.signOut();
+        throw new Error('🚫 Your account has been suspended or blocked. Please contact support.');
+      }
+
+      // Redirect on Success
       router.push('/profile');
     } catch (err) {
-      setAuthError(err.message || 'Invalid credentials.');
+      console.error('Customer Login Error:', err);
+      setAuthError(err.message || 'Invalid email/username or password.');
+    } finally {
       setIsSubmitting(false);
     }
   }
 
-  // Real Supabase Google OAuth Sign-In
+  // Supabase Google OAuth Handler
   async function handleGoogleSignIn() {
     setIsGoogleLoading(true);
     setAuthError('');
 
     try {
+      const redirectOrigin = typeof window !== 'undefined' ? window.location.origin : '';
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/profile`,
+          redirectTo: `${redirectOrigin}/auth/callback?role=customer&next=/profile`,
         },
       });
 
       if (error) throw error;
     } catch (err) {
+      console.error('Google Auth Error:', err);
       setAuthError('Could not connect to Google authentication.');
       setIsGoogleLoading(false);
     }
   }
 
+  const isEmailInput = formValues.identifier.includes('@');
+
   return (
-    <div className="bg-[linear-gradient(135deg,_#f1e1e6_0%,_#d1a3c7_50%,_#7a6fb0_100%)] min-h-screen flex items-center justify-center px-4 py-10 sm:py-12">
-      <div className="bg-white p-6 sm:p-8 rounded-lg shadow-2xl w-full max-w-sm sm:max-w-md border-2 border-purple-300 my-8">
+    <div className="bg-[linear-gradient(135deg,_#f1e1e6_0%,_#d1a3c7_50%,_#7a6fb0_100%)] min-h-[calc(100vh-120px)] flex items-center justify-center px-4 py-8 w-full">
+      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-[380px] border border-purple-200 my-4">
         
-        {/* Avatar Upload / Preview Section */}
-        <div className="flex justify-center mb-6">
-          <div className="relative">
-            <div 
-              id="avatar-preview" 
-              className="w-24 h-24 rounded-full bg-purple-100 border-4 border-purple-400 flex items-center justify-center overflow-hidden text-purple-900 font-bold text-xl"
-            >
-              {avatarImage ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={avatarImage} className="w-full h-full object-cover" alt="Avatar Preview" />
-              ) : (
-                <span>{avatarLetter}</span>
-              )}
-            </div>
-            <input 
-              type="file" 
-              id="avatar-upload" 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handleAvatarChange}
-            />
-            <label 
-              htmlFor="avatar-upload" 
-              className="absolute bottom-0 right-0 bg-purple-600 text-white p-1 rounded-full cursor-pointer hover:bg-purple-700 transition w-7 h-7 flex items-center justify-center text-lg"
-            >
-              +
-            </label>
-          </div> 
+        {/* Header */}
+        <div className="flex flex-col items-center mb-3">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[11px] font-semibold mb-3 border border-purple-200">
+            <ShoppingBag className="w-3 h-3 text-purple-700" />
+            Customer Portal
+          </span>
+
+          <div className="w-16 h-16 rounded-full bg-purple-50 border-2 border-purple-300 flex items-center justify-center overflow-hidden text-purple-900 font-bold text-xl shadow-inner">
+            <span>{avatarLetter}</span>
+          </div>
         </div>
 
-        <h2 className="text-2xl font-bold mb-6 text-center text-purple-900">Customer Login</h2>
+        <h2 className="text-xl font-bold text-center text-purple-950">Welcome Back</h2>
+        <p className="text-[11px] text-center text-purple-600 mb-4">
+          Sign in to manage your orders and account
+        </p>
 
+        {/* Error Alert */}
         {authError && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 text-xs rounded-md text-center">
-            {authError}
+          <div className="mb-3 p-2.5 bg-red-50 border border-red-300 text-red-700 text-xs rounded-lg flex items-start gap-2 shadow-sm">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <span className="leading-snug font-medium">{authError}</span>
           </div>
         )}
-        
-        <form id="loginForm" onSubmit={handleSubmit} noValidate>
-          <div className="mb-4">
-            <input
-              type="text"
-              id="email-input"
-              value={formValues.identifier}
-              onChange={(e) => handleFieldChange('identifier', e.target.value)}
-              onBlur={handleEmailBlur}
-              placeholder="Email or Username"
-              disabled={isSubmitting || isGoogleLoading}
-              className={`w-full p-3 border-2 rounded-md text-purple-900 placeholder-purple-400 focus:outline-none focus:border-purple-500 transition-all disabled:bg-gray-100 ${
-                errors.identifier ? 'border-red-500' : 'border-purple-200'
-              }`}
-            />
-            {errors.identifier && (
-              <span className="error-msg text-xs text-red-500 pt-1 block">{errors.identifier}</span>
-            )}
-          </div>
+
+        <form onSubmit={handleSubmit} noValidate>
           
-          <div className="mb-4">
-            <input
-              type="password"
-              id="password"
-              value={formValues.password}
-              onChange={(e) => handleFieldChange('password', e.target.value)}
-              placeholder="Password"
-              disabled={isSubmitting || isGoogleLoading}
-              className={`w-full p-3 border-2 rounded-md text-purple-900 placeholder-purple-400 focus:outline-none focus:border-purple-500 transition-all disabled:bg-gray-100 ${
-                errors.password ? 'border-red-500' : 'border-purple-200'
-              }`}
-            />
-            {errors.password && (
-              <span className="error-msg text-xs text-red-500 pt-1 block">{errors.password}</span>
+          {/* Email / Username Field */}
+          <div className="mb-3">
+            <label className="block text-[11px] font-semibold text-purple-900 mb-1">
+              Email or Username
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-400">
+                {isEmailInput ? <Mail className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+              </div>
+              <input
+                type="text"
+                id="email-input"
+                value={formValues.identifier}
+                onChange={(e) => handleFieldChange('identifier', e.target.value)}
+                placeholder="email@domain.com or username"
+                disabled={isSubmitting || isGoogleLoading}
+                className={`w-full pl-9 pr-3 py-2 text-xs border rounded-lg text-purple-950 placeholder-purple-300 focus:outline-none focus:border-purple-600 transition-all disabled:bg-gray-50 ${
+                  errors.identifier ? 'border-red-400 bg-red-50/20' : 'border-purple-200'
+                }`}
+              />
+            </div>
+            {errors.identifier && (
+              <span className="text-[10px] text-red-500 pt-0.5 block font-medium">
+                {errors.identifier}
+              </span>
             )}
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isSubmitting || isGoogleLoading} 
-            className="w-full bg-purple-700 text-white p-3 rounded-md hover:bg-purple-800 transition font-semibold border-2 border-purple-700 disabled:opacity-75 cursor-pointer disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Logging in...' : 'Login'}
-          </button>
-        </form> 
+          {/* Password Field */}
+          <div className="mb-2">
+            <label className="block text-[11px] font-semibold text-purple-900 mb-1">Password</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-400">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                value={formValues.password}
+                onChange={(e) => handleFieldChange('password', e.target.value)}
+                placeholder="••••••••"
+                disabled={isSubmitting || isGoogleLoading}
+                className={`w-full pl-9 pr-3 py-2 text-xs border rounded-lg text-purple-950 placeholder-purple-300 focus:outline-none focus:border-purple-600 transition-all disabled:bg-gray-50 ${
+                  errors.password ? 'border-red-400 bg-red-50/20' : 'border-purple-200'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-purple-400 hover:text-purple-700 transition"
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            {errors.password && (
+              <span className="text-[10px] text-red-500 pt-0.5 block font-medium">
+                {errors.password}
+              </span>
+            )}
+          </div>
 
-        <div className="relative my-6">
+          {/* Forgot Password */}
+          <div className="mb-4 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-[11px] font-semibold text-purple-700 hover:text-purple-900 hover:underline transition"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={isSubmitting || isGoogleLoading}
+            className="w-full bg-purple-700 text-white py-2.5 px-4 rounded-lg hover:bg-purple-800 transition-all font-semibold shadow-sm border border-purple-700 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs sm:text-sm"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Login to Customer Portal</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div className="relative my-4">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-purple-200"></div>
           </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-3 bg-white text-purple-500 font-medium">Or continue with</span>
+          <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
+            <span className="px-2.5 bg-white text-purple-400 font-semibold">Or continue with</span>
           </div>
         </div>
 
+        {/* Google Login Button */}
         <button
           type="button"
           onClick={handleGoogleSignIn}
           disabled={isSubmitting || isGoogleLoading}
-          className="w-full flex items-center justify-center gap-3 bg-white text-gray-700 p-3 rounded-md hover:bg-gray-50 transition font-semibold border-2 border-purple-200 disabled:opacity-75 cursor-pointer disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 bg-white hover:bg-purple-50/50 text-gray-700 py-2 px-4 rounded-lg transition-all font-semibold border border-purple-200 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed text-xs shadow-sm"
         >
           {isGoogleLoading ? (
-            <span className="text-purple-600">Connecting to Google...</span>
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
+              <span className="text-purple-600">Connecting...</span>
+            </>
           ) : (
             <>
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -221,18 +300,14 @@ export default function CustomerSignIn() {
           )}
         </button>
 
-        <div className="mt-4 text-center">
-          <Link href="#" className="text-sm text-purple-600 hover:underline">
-            Forgot Password?
-          </Link>
-        </div>
-        
-        <p className="mt-4 text-center text-sm text-purple-800">
+        {/* Register Link */}
+        <p className="mt-4 text-center text-[11px] text-purple-800 font-medium">
           Do not have an account?{' '}
-          <Link href="/signup/customer" className="text-purple-900 font-bold hover:underline">
+          <Link href="/signup/customer" className="text-purple-950 font-bold hover:underline">
             Register here
           </Link>
         </p>
+
       </div>
     </div>
   );

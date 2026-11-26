@@ -1,55 +1,24 @@
 'use client';
-import { useState } from 'react';
 import Link from 'next/link';
-import { 
-  FiTrash2, 
-  FiMinus, 
-  FiPlus, 
-  FiArrowLeft, 
-  FiShield, 
-  FiTruck, 
-  FiShoppingBag 
+import {
+  FiTrash2,
+  FiMinus,
+  FiPlus,
+  FiArrowLeft,
+  FiShield,
+  FiTruck,
+  FiShoppingBag
 } from 'react-icons/fi';
 import { HiOutlineShoppingBag } from 'react-icons/hi2';
-export default function CartPage() {
-  const [cartItems, setCartItems] = useState([
-    {
-      id: '1',
-      title: 'Wireless Noise Canceling Headphones',
-      price: 12500,
-      quantity: 1,
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
-      vendor: 'TechZone Pakistan',
-      inStock: true,
-    },
-    {
-      id: '2',
-      title: 'Smart Fitness Watch - Series 7',
-      price: 8900,
-      quantity: 2,
-      image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&q=80',
-      vendor: 'Gadget World',
-      inStock: true,
-    },
-  ]);
+import { useCart } from '@/context/CartContext';
 
-  const handleQuantityChange = (id, delta) => {
-    setCartItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const newQty = item.quantity + delta;
-          return newQty > 0 ? { ...item, quantity: newQty } : item;
-        }
-        return item;
-      })
-    );
-  };
-  const handleRemove = (id) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
-  };
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+export default function CartPage() {
+  const { cartItems, updateQuantity, removeFromCart, cartCount, cartTotal } = useCart();
+
+  const subtotal = cartTotal;
   const shippingFee = cartItems.length > 0 ? 250 : 0;
   const total = subtotal + shippingFee;
+
   return (
     <div className="min-h-screen bg-slate-50/50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -57,7 +26,7 @@ export default function CartPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
             <FiShoppingBag className="text-purple-600" /> Shopping Cart
             <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-              {cartItems.reduce((acc, item) => acc + item.quantity, 0)} items
+              {cartCount} items
             </span>
           </h1>
         </div>
@@ -88,15 +57,17 @@ export default function CartPage() {
                   <div className="flex items-center gap-4 w-full sm:w-auto">
                     <img
                       src={item.image}
-                      alt={item.title}
+                      alt={item.name}
                       className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl bg-slate-100 border border-slate-100 shrink-0"
                     />
                     <div className="flex-1">
-                      <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
-                        {item.vendor}
-                      </span>
+                      {item.vendor && (
+                        <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
+                          {item.vendor}
+                        </span>
+                      )}
                       <h3 className="font-semibold text-slate-800 text-base mt-1 line-clamp-1">
-                        {item.title}
+                        {item.name}
                       </h3>
                       <p className="text-sm font-bold text-slate-900 mt-1">
                         PKR {item.price.toLocaleString()}
@@ -107,7 +78,7 @@ export default function CartPage() {
                   <div className="flex items-center justify-between w-full sm:w-auto sm:space-x-6 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
                     <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50/50">
                       <button
-                        onClick={() => handleQuantityChange(item.id, -1)}
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
                         className="p-2 text-slate-600 hover:text-purple-600 transition"
                       >
                         <FiMinus className="w-3.5 h-3.5" />
@@ -116,7 +87,7 @@ export default function CartPage() {
                         {item.quantity}
                       </span>
                       <button
-                        onClick={() => handleQuantityChange(item.id, 1)}
+                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
                         className="p-2 text-slate-600 hover:text-purple-600 transition"
                       >
                         <FiPlus className="w-3.5 h-3.5" />
@@ -128,7 +99,7 @@ export default function CartPage() {
                         PKR {(item.price * item.quantity).toLocaleString()}
                       </p>
                       <button
-                        onClick={() => handleRemove(item.id)}
+                        onClick={() => removeFromCart(item.id)}
                         className="text-slate-400 hover:text-red-500 p-1 transition"
                         title="Remove item"
                       >

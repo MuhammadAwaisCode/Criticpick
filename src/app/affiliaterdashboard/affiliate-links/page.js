@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Link2, 
   Copy, 
@@ -8,75 +8,86 @@ import {
   Plus, 
   ExternalLink,
   Search,
-  Globe
+  Globe,
+  Loader2
 } from 'lucide-react';
+import { fetchAffiliateLinks, createAffiliateLink } from '@/actions/affiliateActions';
 
 export default function AffiliateLinksPage() {
   const [targetUrl, setTargetUrl] = useState('');
   const [generatedLink, setGeneratedLink] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [savedLinks, setSavedLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock data for previously generated links
-  const [savedLinks, setSavedLinks] = useState([
-    {
-      id: 'link-1',
-      title: 'Summer Collection 2026',
-      originalUrl: 'https://yourstore.com/collections/summer',
-      affiliateUrl: 'https://yourstore.com/collections/summer?ref=alex_vip',
-      clicks: 1245,
-      sales: 34,
-      date: 'Aug 01, 2026'
-    },
-    {
-      id: 'link-2',
-      title: 'Wireless Headphones Pro',
-      originalUrl: 'https://yourstore.com/products/headphones-pro',
-      affiliateUrl: 'https://yourstore.com/products/headphones-pro?ref=alex_vip',
-      clicks: 890,
-      sales: 12,
-      date: 'Jul 28, 2026'
-    },
-    {
-      id: 'link-3',
-      title: 'Home Page Default',
-      originalUrl: 'https://yourstore.com',
-      affiliateUrl: 'https://yourstore.com?ref=alex_vip',
-      clicks: 3420,
-      sales: 89,
-      date: 'Jan 15, 2026'
+  const affiliateId = 'CURRENT_USER_ID'; // Handled safely inside Server Actions
+
+  // Load saved affiliate links from Supabase
+  useEffect(() => {
+    async function loadLinks() {
+      setLoading(true);
+      const data = await fetchAffiliateLinks(affiliateId);
+      
+      // Transform DB response to match component state structure
+      const formattedData = data.map((item) => ({
+        id: item.id,
+        title: item.products?.title || 'Custom Affiliate Link',
+        originalUrl: item.target_url ? item.target_url.split('?')[0] : 'https://yourstore.com',
+        affiliateUrl: item.target_url,
+        clicks: item.clicks || 0,
+        sales: 0, // Calculated dynamically from orders/commissions
+        date: new Date(item.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric'
+        })
+      }));
+
+      setSavedLinks(formattedData);
+      setLoading(false);
     }
-  ]);
+    loadLinks();
+  }, []);
 
-  const affiliateId = 'alex_vip'; // Yeh backend se aayega (logged-in user ka ID)
-
-  const handleGenerateLink = (e) => {
+  const handleGenerateLink = async (e) => {
     e.preventDefault();
-    if (!targetUrl) return;
+    if (!targetUrl || isSubmitting) return;
 
-    // Basic URL parsing to add referral parameter safely
     try {
-      const url = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
-      url.searchParams.set('ref', affiliateId);
-      const newLink = url.toString();
+      setIsSubmitting(true);
       
-      setGeneratedLink(newLink);
-      
-      // Add to saved links list (for demo purposes)
-      const newSavedLink = {
-        id: `link-${Date.now()}`,
-        title: 'New Custom Link',
-        originalUrl: targetUrl,
-        affiliateUrl: newLink,
-        clicks: 0,
-        sales: 0,
-        date: 'Today'
-      };
-      setSavedLinks([newSavedLink, ...savedLinks]);
-      setTargetUrl(''); // Clear input
+      // Extract Product ID if present in the URL path (e.g. /products/123)
+      const urlObj = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
+      const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+      const extractedProductId = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'general';
 
+      // Call Server Action to save to Supabase
+      const result = await createAffiliateLink(affiliateId, extractedProductId, '');
+
+      if (result.url) {
+        setGeneratedLink(result.url);
+
+        const newSavedLink = {
+          id: result.link?.id || `link-${Date.now()}`,
+          title: 'New Custom Link',
+          originalUrl: targetUrl,
+          affiliateUrl: result.url,
+          clicks: 0,
+          sales: 0,
+          date: 'Just Now'
+        };
+
+        setSavedLinks([newSavedLink, ...savedLinks]);
+        setTargetUrl('');
+      } else {
+        alert(result.error || 'Failed to generate affiliate link.');
+      }
     } catch (error) {
       alert("Please enter a valid URL");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -128,9 +139,15 @@ export default function AffiliateLinksPage() {
           </div>
           <button
             type="submit"
-            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer shrink-0"
+            disabled={isSubmitting}
+            className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold text-xs py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer shrink-0"
           >
-            <Plus className="w-4 h-4" /> Generate Link
+            {isSubmitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
+            {isSubmitting ? 'Generating...' : 'Generate Link'}
           </button>
         </form>
 
@@ -143,7 +160,7 @@ export default function AffiliateLinksPage() {
             </div>
             <button
               onClick={() => handleCopy(generatedLink, 'new-link')}
-              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
             >
               {copiedId === 'new-link' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} 
               {copiedId === 'new-link' ? 'Copied!' : 'Copy Link'}
@@ -172,7 +189,11 @@ export default function AffiliateLinksPage() {
 
         {/* Links List */}
         <div className="divide-y divide-slate-100">
-          {filteredLinks.length > 0 ? (
+          {loading ? (
+            <div className="p-8 text-center flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+            </div>
+          ) : filteredLinks.length > 0 ? (
             filteredLinks.map((link) => (
               <div key={link.id} className="p-4 sm:p-5 hover:bg-slate-50/50 transition-colors">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

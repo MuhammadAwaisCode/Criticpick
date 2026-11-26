@@ -1,51 +1,127 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { 
   FiShoppingBag, 
   FiMinus, 
   FiPlus, 
-  FiStar, 
   FiTruck, 
   FiShield, 
   FiRotateCcw, 
   FiHeart, 
-  FiShare2, 
   FiCheck 
 } from 'react-icons/fi';
-import { FaStar, FaStarHalfAlt, FaRegStar } from 'react-icons/fa';
+import { FaStar, FaStarHalfAlt } from 'react-icons/fa';
+import { useCart } from '@/context/CartContext';
+import { supabase } from '@/lib/supabase/client';
 
-export default function ProductDetailPage({ params }) {
-  // Mock product details
-  const product = {
-    id: params?.id || '1',
-    title: 'Premium Wireless Noise Canceling Headphones',
-    price: 12500,
-    originalPrice: 15000,
-    rating: 4.5,
-    reviewsCount: 128,
-    vendor: 'TechZone Pakistan',
-    inStock: true,
-    description:
-      'Experience high-fidelity sound with state-of-the-art active noise cancellation. Built for comfort during long listening sessions with up to 30 hours of battery life.',
-    images: [
-      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80',
-      'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800&q=80',
-      'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=800&q=80',
-    ],
-    colors: ['#000000', '#3b82f6', '#e2e8f0'],
-  };
+export default function ProductDetailPage() {
+  const params = useParams();
+  const productId = params?.id;
 
+  const { addToCart } = useCart();
+
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedColor, setSelectedColor] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [addedToCart, setAddedToCart] = useState(false);
 
+  // ── Fetch single product from Supabase ─────────────────────────────────────
+  useEffect(() => {
+    async function fetchProduct() {
+      if (!productId) return;
+      setLoading(true);
+
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', productId)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          // Normalize image links into an array
+          let imageList = [];
+          if (Array.isArray(data.images) && data.images.length > 0) {
+            imageList = data.images;
+          } else if (data.image_url) {
+            imageList = [data.image_url];
+          } else if (data.image) {
+            imageList = [data.image];
+          } else {
+            imageList = ['https://placehold.co/800x800/f3e8ff/7e22ce?text=Product+Image'];
+          }
+
+          setProduct({
+            id: data.id,
+            title: data.name || data.title || 'Untitled Product',
+            price: Number(data.price) || 0,
+            originalPrice: data.original_price ? Number(data.original_price) : (data.originalPrice ? Number(data.originalPrice) : null),
+            rating: data.rating || 4.5,
+            reviewsCount: data.review_count || data.reviews_count || data.reviewsCount || 100,
+            vendor: data.brand || data.vendor || 'Verified Seller',
+            inStock: data.in_stock !== undefined ? data.in_stock : true,
+            description: data.description || 'No detailed description available for this item.',
+            images: imageList,
+          });
+        }
+      } catch (err) {
+        console.error('Error loading product details:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchProduct();
+  }, [productId]);
+
   const handleAddToCart = () => {
+    if (!product) return;
+    addToCart(
+      {
+        id: product.id,
+        name: product.title,
+        price: product.price,
+        image: product.images[0],
+      },
+      quantity
+    );
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2500);
   };
+
+  // ── Loading Skeleton State ──
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50/50 py-12 px-4 flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-600 text-sm font-semibold">Loading product details...</p>
+      </div>
+    );
+  }
+
+  // ── Product Not Found State ──
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-slate-50/50 py-16 px-4 text-center">
+        <div className="max-w-md mx-auto bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Product Not Found</h2>
+          <p className="text-slate-500 text-xs mb-6">The item you are looking for does not exist or has been removed.</p>
+          <Link
+            href="/products"
+            className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs px-6 py-2.5 rounded-full transition"
+          >
+            Back to Products
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/50 py-8 px-4 sm:px-6 lg:px-8">
@@ -66,7 +142,7 @@ export default function ProductDetailPage({ params }) {
           <div className="space-y-4">
             <div className="aspect-square bg-slate-100 rounded-2xl overflow-hidden border border-slate-200/60 relative">
               <img
-                src={product.images[selectedImage]}
+                src={product.images[selectedImage] || product.images[0]}
                 alt={product.title}
                 className="w-full h-full object-cover"
               />
@@ -79,19 +155,21 @@ export default function ProductDetailPage({ params }) {
             </div>
 
             {/* Thumbnails */}
-            <div className="flex gap-3">
-              {product.images.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedImage(idx)}
-                  className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition ${
-                    selectedImage === idx ? 'border-purple-600 ring-2 ring-purple-100' : 'border-slate-200 opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <img src={img} alt="thumbnail" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
+            {product.images.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {product.images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedImage(idx)}
+                    className={`w-20 h-20 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                      selectedImage === idx ? 'border-purple-600 ring-2 ring-purple-100' : 'border-slate-200 opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={img} alt={`thumbnail-${idx}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Details Section */}
@@ -101,9 +179,11 @@ export default function ProductDetailPage({ params }) {
                 <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 bg-purple-50 px-3 py-1 rounded-md">
                   {product.vendor}
                 </span>
-                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md flex items-center gap-1">
-                  <FiCheck /> In Stock
-                </span>
+                {product.inStock && (
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md flex items-center gap-1">
+                    <FiCheck /> In Stock
+                  </span>
+                )}
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
@@ -188,7 +268,7 @@ export default function ProductDetailPage({ params }) {
 
                 <Link
                   href="/checkout"
-                  className="w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3.5 px-4 rounded-xl shadow-md transition"
+                  className="w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3.5 px-4 rounded-xl shadow-md transition flex items-center justify-center"
                 >
                   Buy Now
                 </Link>
