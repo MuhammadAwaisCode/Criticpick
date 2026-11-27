@@ -1,24 +1,52 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { FiExternalLink, FiCheck } from 'react-icons/fi';
+
+const formatDate = (iso) => (iso ? new Date(iso).toISOString().split('T')[0] : '');
 
 export default function OrdersPage() {
   const milestones = ['Order Placed', 'Shipped', 'Customs Clearance', 'Out for Delivery', 'Delivered'];
   const [timelineAnimated, setTimelineAnimated] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
 
-  const [orders] = useState([
-    {
-      id: 'ORD-7743', product: 'Rose Glow Facial Serum x2', total: 49.98,
-      tracking: 'DHL-88213940PK', courier: 'DHL Express',
-      courierUrl: '#', currentStep: 3, placedDate: '2026-07-10'
-    },
-    {
-      id: 'ORD-7801', product: 'Argan Hair Oil x1', total: 18.75,
-      tracking: 'FDX-77410823US', courier: 'FedEx International',
-      courierUrl: '#', currentStep: 1, placedDate: '2026-07-17'
+  const [orders, setOrders] = useState([]);
+
+  const fetchOrders = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/signin/customer');
+      return;
     }
-  ]);
+
+    const { data } = await supabase
+      .from('orders')
+      .select('id, order_number, total, tracking_number, courier_name, courier_url, current_step, placed_at, order_items(product_name, quantity)')
+      .eq('user_id', user.id)
+      .order('placed_at', { ascending: false });
+
+    if (data) {
+      setOrders(data.map((o) => ({
+        id: o.order_number,
+        product: (o.order_items || [])
+          .map((it) => `${it.product_name}${it.quantity > 1 ? ` x${it.quantity}` : ''}`)
+          .join(', '),
+        total: o.total,
+        tracking: o.tracking_number,
+        courier: o.courier_name,
+        courierUrl: o.courier_url || '#',
+        currentStep: o.current_step,
+        placedDate: formatDate(o.placed_at),
+      })));
+    }
+  }, [supabase, router]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   useEffect(() => {
     const timer = setTimeout(() => setTimelineAnimated(true), 150);

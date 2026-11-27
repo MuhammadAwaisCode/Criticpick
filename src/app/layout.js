@@ -1,13 +1,14 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
 
-// 1. Cart Context
+// 1. Context Providers
 import { CartProvider } from '@/context/CartContext';
+import { UserProvider } from '@/context/UserContext';
 
-// 2. Navigation & Layout Components (All using @ alias)
+// 2. Navigation & Layout Components
 import TopNav from '@/components/TopNav';
 import SubNav from '@/components/SubNav';
-import Footer from '@/components/Footer';
+import FooterWrapper from '@/components/FooterWrapper';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -54,28 +55,17 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={inter.variable}>
-      <head>
-        {/* Font Awesome Icons (Fixed - Integrity Attributes Removed) */}
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
-        />
-      </head>
       <body className="font-sans bg-hero-gradient min-h-screen flex flex-col overflow-x-hidden">
-        
+        <UserProvider>
+          <CartProvider>
+            <TopNav />
+            <SubNav />
 
+            <main className="flex-1 flex flex-col">{children}</main>
 
-        <CartProvider>
-     
-          <TopNav />
-          <SubNav />
-
-          <main className="flex-1 flex flex-col">{children}</main>
-
-          
-          <Footer />
-        </CartProvider>
-
+            <FooterWrapper />
+          </CartProvider>
+        </UserProvider>
       </body>
     </html>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useCart } from '@/context/CartContext';
 
 // Renders a 5-star rating row (full / half / empty) based on a numeric rating.
 function StarRating({ rating, reviewCount, size = 'text-[9px] sm:text-[10px]' }) {
@@ -30,25 +31,9 @@ function StarRating({ rating, reviewCount, size = 'text-[9px] sm:text-[10px]' })
 
 /**
  * Shared product card used across the homepage rows and the products grid.
- *
- * product shape:
- * {
- *   id: string,
- *   name: string,
- *   brand?: string,
- *   category: string,
- *   price: number,
- *   originalPrice?: number,
- *   rating: number,
- *   reviewCount: number,
- *   image: string,
- *   badge?: 'NEW' | 'SALE' | 'BESTSELLER',
- *   inStock?: boolean,
- * }
- *
- * `compact` renders a fixed-width card meant for horizontal scroll rows.
  */
-export default function ProductCard({ product, compact = false }) {
+export default function ProductCard({ product, compact = false, onAddToCart }) {
+  const { addToCart } = useCart();
   const [isAdded, setIsAdded] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
 
@@ -60,6 +45,15 @@ export default function ProductCard({ product, compact = false }) {
   function handleAddToCart(event) {
     event.preventDefault();
     event.stopPropagation();
+    
+    // Updates global CartContext & TopNav counter
+    addToCart(product);
+
+    // Call optional parent prop callback if provided
+    if (typeof onAddToCart === 'function') {
+      onAddToCart(product);
+    }
+
     setIsAdded(true);
     window.setTimeout(() => setIsAdded(false), 2000);
   }
@@ -76,13 +70,12 @@ export default function ProductCard({ product, compact = false }) {
         compact ? 'w-[140px] sm:w-[170px] shrink-0 snap-start' : 'w-full'
       }`}
     >
-      {/* Wishlist toggle floats above the image, outside the Link so nested
-          buttons stay valid HTML (no <button> inside <a>). */}
+      {/* Wishlist toggle */}
       <button
         type="button"
         onClick={handleToggleWishlist}
         aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-        className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 bg-white/95 text-purple-700 rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center shadow"
+        className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 bg-white/95 text-purple-700 rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center shadow cursor-pointer"
       >
         <i className={`${isWishlisted ? 'fas text-pink-500' : 'far'} fa-heart text-xs sm:text-sm`} />
       </button>
@@ -136,7 +129,7 @@ export default function ProductCard({ product, compact = false }) {
         <button
           type="button"
           onClick={handleAddToCart}
-          className={`w-full text-[9px] sm:text-[10px] font-bold py-1.5 rounded-xl transition shadow-sm flex items-center justify-center gap-1 whitespace-nowrap ${
+          className={`w-full text-[9px] sm:text-[10px] font-bold py-1.5 rounded-xl transition shadow-sm flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
             isAdded
               ? 'bg-green-500 text-white'
               : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:opacity-90'

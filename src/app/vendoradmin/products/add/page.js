@@ -1,701 +1,543 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  UploadCloud,
-  Crop,
-  RotateCcw,
-  FlipHorizontal,
-  FlipVertical,
-  Star,
-  Check,
-  X,
-  Plus,
-  Scissors,
-  Film
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
+import { 
+  UploadCloud, X, Plus, Trash2, ArrowLeft, 
+  FlipHorizontal, FlipVertical, Crop, RotateCcw, Check, Star, Scale, Tag, Search
 } from 'lucide-react';
-import { useVendorData, titles } from '../../context/VendorDataContext';
 
-// Fix #3 / #4: strict per-file size cap and max attachment count
-const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3 MB
-const MAX_FILES = 5;
+export default function AddProductPage() {
+  const router = useRouter();
 
-export default function ProductEnginePage() {
-  const { publishProduct, triggerToast } = useVendorData();
-
-  /* ==========================================================
-     PRODUCT ENGINE FORM STATE (page-local: only this page needs it)
-     ========================================================== */
-  const [prodTitle, setProdTitle] = useState('');
-  const [prodCategory, setProdCategory] = useState('Beauty');
+  // Core Product Data
+  const [title, setTitle] = useState('');
+  const [taxonomy, setTaxonomy] = useState('Beauty Matrix');
+  const [description, setDescription] = useState('');
   const [crossBorder, setCrossBorder] = useState(false);
-  const [variants, setVariants] = useState([
-    { rowId: 1, size: '50ml', color: 'Rose Gold', sku: 'LB-SER-001-RG', stock: 42 }
-  ]);
-  const [variantCounter, setVariantCounter] = useState(1);
 
-  /* ==========================================================
-     IMAGE / VIDEO UPLOAD & CANVAS STUDIO STATE MATRIX
-     ========================================================== */
-  const imageInputRef = useRef(null);
-  const editorCanvasRef = useRef(null);
-  const cropOverlayRef = useRef(null);
-  const dragStartRef = useRef({ x: 0, y: 0 });
-  const cropDragStartRef = useRef(null);
+  // Tags & Keywords State
+  const [tags, setTags] = useState(['Skincare', 'Serum', 'Organic']);
+  const [tagInput, setTagInput] = useState('');
+  const [metaTitle, setMetaTitle] = useState('');
+  const [metaKeywords, setMetaKeywords] = useState('');
 
-  const [productImages, setProductImages] = useState([]);
-  const [activeImageIdx, setActiveImageIdx] = useState(null);
-  const [primaryImageIdx, setPrimaryImageIdx] = useState(0);
-  const [dragOver, setDragOver] = useState(false);
-  const [cropMode, setCropMode] = useState(false);
-  const [cropRect, setCropRect] = useState(null); // { x, y, w, h } in internal canvas pixel space
+  // Pricing & Inventory
+  const [price, setPrice] = useState('');
+  const [comparePrice, setComparePrice] = useState('');
+  const [sku, setSku] = useState('');
+  const [stock, setStock] = useState('');
 
-  const [editorState, setEditorState] = useState({
-    zoom: 100, rotate: 0, bright: 100, contrast: 100, sat: 100,
-    flipH: false, flipV: false, offX: 0, offY: 0, isDragging: false
-  });
+  // Weight & Shipping Dimensions
+  const [weight, setWeight] = useState('');
+  const [weightUnit, setWeightUnit] = useState('kg');
+  const [dimLength, setDimLength] = useState('');
+  const [dimWidth, setDimWidth] = useState('');
+  const [dimHeight, setDimHeight] = useState('');
 
-  const activeMedia = activeImageIdx !== null ? productImages[activeImageIdx] : null;
-  const activeIsVideo = activeMedia?.type === 'video';
+  // Media & Photo Editor States
+  const [images, setImages] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [primaryIndex, setPrimaryIndex] = useState(0);
 
-  /* ==========================================================
-     IMAGE / VIDEO MEDIA OPERATIONS PIPELINE
-     ========================================================== */
-  function handleImageFiles(files) {
-    if (!files || files.length === 0) return;
+  // Variant Matrix State
+  const [variants, setVariants] = useState([]);
 
-    if (productImages.length + files.length > MAX_FILES) {
-      triggerToast(`Maximum allocation pool limit is ${MAX_FILES} files.`, 'error');
-      return;
+  // Editor Sliders Initial State
+  const initialEditState = {
+    zoom: 100,
+    rotate: 0,
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    flipH: false,
+    flipV: false
+  };
+
+  const [editSettings, setEditSettings] = useState(initialEditState);
+
+  // Add Tag on Enter or Comma
+  const handleTagKeyDown = (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+      e.preventDefault();
+      const newTag = tagInput.trim().replace(/,/g, '');
+      if (!tags.includes(newTag)) {
+        setTags([...tags, newTag]);
+      }
+      setTagInput('');
     }
-
-    [...files].forEach((f) => {
-      const isImage = f.type.startsWith('image/');
-      const isVideo = f.type.startsWith('video/');
-      if (!isImage && !isVideo) return;
-
-      // Fix #3: strict 3MB cap per file
-      if (f.size > MAX_FILE_SIZE) {
-        triggerToast(`"${f.name}" exceeds the 3MB limit and was skipped.`, 'error');
-        return;
-      }
-
-      const url = URL.createObjectURL(f);
-
-      if (isVideo) {
-        setProductImages((prev) => {
-          const next = [...prev, { img: null, url, name: f.name, editedUrl: null, type: 'video' }];
-          if (next.length === 1) setActiveImageIdx(0);
-          return next;
-        });
-        return;
-      }
-
-      // Image path — preload so the canvas editor can draw it immediately
-      const img = new Image();
-      img.onload = () => {
-        setProductImages((prev) => {
-          const next = [...prev, { img, url, name: f.name, editedUrl: null, type: 'image' }];
-          if (next.length === 1) setActiveImageIdx(0);
-          return next;
-        });
-      };
-      img.onerror = () => {
-        triggerToast(`"${f.name}" could not be read as an image.`, 'error');
-      };
-      img.src = url;
-    });
-  }
-
-  function removeProductImage(i) {
-    setProductImages((prev) => prev.filter((_, idx) => idx !== i));
-    setActiveImageIdx((prev) => (prev === null ? null : prev >= i ? Math.max(0, prev - 1) : prev));
-    if (primaryImageIdx === i) setPrimaryImageIdx(0);
-  }
-
-  function updateEditorState(key, val) {
-    setEditorState((prev) => ({ ...prev, [key]: val }));
-  }
-
-  function resetEditor() {
-    setEditorState({
-      zoom: 100, rotate: 0, bright: 100, contrast: 100, sat: 100,
-      flipH: false, flipV: false, offX: 0, offY: 0, isDragging: false
-    });
-  }
-
-  function flipH() { setEditorState((s) => ({ ...s, flipH: !s.flipH })); }
-  function flipV() { setEditorState((s) => ({ ...s, flipV: !s.flipV })); }
-
-  function toggleCrop() {
-    setCropMode((m) => {
-      const next = !m;
-      if (!next) setCropRect(null);
-      return next;
-    });
-  }
-
-  function applyEdits() {
-    const canvas = editorCanvasRef.current;
-    if (!canvas || activeIsVideo) return;
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    setProductImages((prev) => prev.map((img, i) =>
-      i === activeImageIdx ? { ...img, editedUrl: dataUrl } : img
-    ));
-    triggerToast('Image edits applied.', 'success');
-  }
-
-  /* ==========================================================
-     CANVAS PAN / ZOOM INTERACTION EVENT HANDLERS
-     ========================================================== */
-  const handleCanvasMouseDown = (e) => {
-    if (cropMode || activeIsVideo) return;
-    setEditorState((prev) => ({ ...prev, isDragging: true }));
-    dragStartRef.current = { x: e.clientX - editorState.offX, y: e.clientY - editorState.offY };
   };
 
-  const handleCanvasMouseMove = (e) => {
-    if (!editorState.isDragging || cropMode || activeIsVideo) return;
-    const nx = e.clientX - dragStartRef.current.x;
-    const ny = e.clientY - dragStartRef.current.y;
-    setEditorState((prev) => ({ ...prev, offX: nx, offY: ny }));
+  const removeTag = (tagToRemove) => {
+    setTags(tags.filter(t => t !== tagToRemove));
   };
 
-  const handleCanvasMouseUp = () => {
-    setEditorState((prev) => ({ ...prev, isDragging: false }));
-  };
-
-  const handleCanvasWheel = (e) => {
-    if (activeIsVideo) return;
-    e.preventDefault();
-    const step = e.deltaY < 0 ? 8 : -8;
-    setEditorState((prev) => ({
-      ...prev,
-      zoom: Math.max(10, Math.min(300, prev.zoom + step))
+  // Upload Handlers
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    const newImages = files.map(file => ({
+      file,
+      url: URL.createObjectURL(file)
     }));
+    setImages(prev => [...prev, ...newImages]);
   };
 
-  /* ==========================================================
-     CROP OVERLAY INTERACTION EVENT HANDLERS (Fix #5)
-     ========================================================== */
-  function getCanvasCoords(e, canvasEl) {
-    const rect = canvasEl.getBoundingClientRect();
-    const scaleX = canvasEl.width / rect.width;
-    const scaleY = canvasEl.height / rect.height;
-    const rawX = (e.clientX - rect.left) * scaleX;
-    const rawY = (e.clientY - rect.top) * scaleY;
-    return {
-      x: Math.max(0, Math.min(canvasEl.width, rawX)),
-      y: Math.max(0, Math.min(canvasEl.height, rawY))
-    };
-  }
-
-  const handleCropMouseDown = (e) => {
-    if (!cropMode || !cropOverlayRef.current) return;
-    const pos = getCanvasCoords(e, cropOverlayRef.current);
-    cropDragStartRef.current = pos;
-    setCropRect({ x: pos.x, y: pos.y, w: 0, h: 0 });
-  };
-
-  const handleCropMouseMove = (e) => {
-    if (!cropMode || !cropDragStartRef.current || !cropOverlayRef.current) return;
-    const pos = getCanvasCoords(e, cropOverlayRef.current);
-    const start = cropDragStartRef.current;
-    setCropRect({
-      x: Math.min(start.x, pos.x),
-      y: Math.min(start.y, pos.y),
-      w: Math.abs(pos.x - start.x),
-      h: Math.abs(pos.y - start.y)
-    });
-  };
-
-  const handleCropMouseUp = () => {
-    cropDragStartRef.current = null;
-  };
-
-  function cancelCrop() {
-    setCropRect(null);
-    setCropMode(false);
-  }
-
-  function applyCrop() {
-    if (!cropRect || cropRect.w < 8 || cropRect.h < 8) {
-      triggerToast('Draw a larger crop box before applying.', 'error');
-      return;
+  const removeImage = (index) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+    if (selectedIndex >= index && selectedIndex > 0) {
+      setSelectedIndex(selectedIndex - 1);
     }
-    const canvas = editorCanvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    const x = Math.round(cropRect.x);
-    const y = Math.round(cropRect.y);
-    const w = Math.round(cropRect.w);
-    const h = Math.round(cropRect.h);
-
-    let imageData;
-    try {
-      imageData = ctx.getImageData(x, y, w, h);
-    } catch (err) {
-      triggerToast('Crop failed — try selecting within the image bounds.', 'error');
-      return;
-    }
-
-    const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = w;
-    cropCanvas.height = h;
-    cropCanvas.getContext('2d').putImageData(imageData, 0, 0);
-    const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
-
-    const newImg = new Image();
-    newImg.onload = () => {
-      setProductImages((prev) => prev.map((im, i) =>
-        i === activeImageIdx ? { ...im, img: newImg, editedUrl: dataUrl, url: dataUrl } : im
-      ));
-      resetEditor();
-      setCropMode(false);
-      setCropRect(null);
-      triggerToast('Crop applied.', 'success');
-    };
-    newImg.src = dataUrl;
-  }
-
-  /* ==========================================================
-     GRAPHICS RENDERING LIFECYCLE EFFECT LOOP (main image canvas)
-     ========================================================== */
-  useEffect(() => {
-    if (activeImageIdx === null) return;
-    const im = productImages[activeImageIdx];
-    if (!im || im.type === 'video' || !im.img) return;
-    const canvas = editorCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { zoom, rotate, bright, contrast, sat, flipH, flipV, offX, offY } = editorState;
-    const W = canvas.width = 800, H = canvas.height = 600;
-
-    ctx.clearRect(0, 0, W, H);
-    ctx.filter = `brightness(${bright}%) contrast(${contrast}%) saturate(${sat}%)`;
-    ctx.save();
-    ctx.translate(W / 2 + offX, H / 2 + offY);
-    ctx.rotate((rotate * Math.PI) / 180);
-    ctx.scale((flipH ? -1 : 1) * (zoom / 100), (flipV ? -1 : 1) * (zoom / 100));
-
-    const src = im.img;
-    const scale = Math.min(W / src.naturalWidth, H / src.naturalHeight);
-    ctx.drawImage(
-      src,
-      (-src.naturalWidth * scale) / 2,
-      (-src.naturalHeight * scale) / 2,
-      src.naturalWidth * scale,
-      src.naturalHeight * scale
-    );
-    ctx.restore();
-    ctx.filter = 'none';
-  }, [editorState, activeImageIdx, productImages]);
-
-  /* ==========================================================
-     CROP OVERLAY RENDERING LOOP (Fix #5)
-     ========================================================== */
-  useEffect(() => {
-    const overlay = cropOverlayRef.current;
-    if (!overlay) return;
-    const ctx = overlay.getContext('2d');
-    if (!ctx) return;
-
-    const W = overlay.width = 800, H = overlay.height = 600;
-    ctx.clearRect(0, 0, W, H);
-
-    if (!cropMode) return;
-
-    // Dim everything, then punch a clear window over the selection
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
-    ctx.fillRect(0, 0, W, H);
-
-    if (cropRect && cropRect.w > 0 && cropRect.h > 0) {
-      ctx.clearRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-      ctx.save();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-      ctx.restore();
-    }
-  }, [cropMode, cropRect]);
-
-  /* ==========================================================
-     BUSINESS ENGINE RUNTIME EVENT HANDLERS
-     ========================================================== */
-  const handleAddVariantRow = () => {
-    const nextId = variantCounter + 1;
-    setVariantCounter(nextId);
-    setVariants((prev) => [
-      ...prev,
-      { rowId: nextId, size: '', color: '', sku: `VAR-${1000 + nextId}`, stock: 0 }
-    ]);
   };
 
-  const handleUpdateVariantField = (rowId, field, value) => {
-    setVariants((prev) =>
-      prev.map((v) =>
-        v.rowId === rowId ? { ...v, [field]: field === 'stock' ? Number(value) : value } : v
-      )
-    );
-  };
+  const handleReset = () => setEditSettings(initialEditState);
 
-  const handleRemoveVariantRow = (rowId) => {
-    setVariants((prev) => prev.filter((v) => v.rowId !== rowId));
-  };
-
-  const handleOriginalFormReset = () => {
-    setProdTitle('');
-    setProdCategory('Beauty');
-    setCrossBorder(false);
-    setVariants([]);
-    setProductImages([]);
-    setActiveImageIdx(null);
-    setPrimaryImageIdx(0);
-    setCropMode(false);
-    setCropRect(null);
-    resetEditor();
-  };
-
-  const handleResetProductForm = () => {
-    handleOriginalFormReset();
-    triggerToast('Product form cleared.', 'info');
-  };
-
-  const handlePublishProduct = (e) => {
-    e.preventDefault();
-    const title = prodTitle.trim();
-    if (!title) {
-      triggerToast('Enter a product title before publishing.', 'error');
-      return;
-    }
-
-    // Shared-state write: pushes the new SKU into inventory via context
-    // so the Inventory Matrix and Overview pages pick it up immediately.
-    publishProduct({ title, category: prodCategory, variants });
-    handleOriginalFormReset();
+  const addVariant = () => {
+    setVariants([...variants, { dimension: '', palette: '', sku: '', stock: '' }]);
   };
 
   return (
-    <div className="p-4 sm:p-8 max-w-5xl mx-auto w-full">
-      <h1 className="text-lg font-black tracking-tight text-slate-900 mb-6">{titles.engine}</h1>
+    <div className="min-h-screen bg-gray-50 p-6">
+      {/* Top Header */}
+      <div className="max-w-5xl mx-auto mb-6 flex justify-between items-center">
+        <button 
+          onClick={() => router.back()} 
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-black transition"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Product Engine</h1>
+      </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-6 animate-fade-in">
-        <form onSubmit={handlePublishProduct} className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Core Title</label>
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* 1. Core Product Information */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+                PRODUCT CORE TITLE
+              </label>
               <input
-                type="text" required
-                value={prodTitle}
-                onChange={(e) => setProdTitle(e.target.value)}
+                type="text"
                 placeholder="e.g. Advanced Retinol Rejuvenator Serum"
-                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-orange-500 outline-none mt-1.5"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Taxonomy Group</label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+                TAXONOMY GROUP
+              </label>
               <select
-                value={prodCategory}
-                onChange={(e) => setProdCategory(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-orange-500 outline-none mt-1.5 bg-white"
+                value={taxonomy}
+                onChange={(e) => setTaxonomy(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
               >
-                <option value="Beauty">Beauty Matrix</option>
-                <option value="Wellness">Wellness Operations</option>
-                <option value="Skincare">Skincare Core</option>
+                <option value="Beauty Matrix">Beauty Matrix</option>
+                <option value="Skincare">Skincare</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Fashion">Fashion</option>
               </select>
             </div>
           </div>
 
-          <div className="flex items-center justify-between border border-slate-100 rounded-xl p-3 bg-slate-50/40">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+              PRODUCT DESCRIPTION & DETAILS
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Enter product description, ingredients, or key specifications..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
+
+          {/* Cross Border Distribution Switch */}
+          <div className="flex justify-between items-center pt-2 border-t">
             <div>
-              <p className="text-xs font-bold text-slate-800">Automated Cross Border Distribution</p>
-              <p className="text-[11px] text-slate-400 font-medium">Auto-convert pricing logs to active regional centers globally (USD/EUR/GBP).</p>
+              <h4 className="text-sm font-semibold text-gray-800">Automated Cross Border Distribution</h4>
+              <p className="text-xs text-gray-500">Auto-convert pricing logs to active regional centers globally (USD/EUR/GBP).</p>
             </div>
             <button
-              type="button" onClick={() => setCrossBorder(!crossBorder)}
-              className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 focus:outline-none ${crossBorder ? 'bg-orange-500' : 'bg-slate-200'}`}
+              type="button"
+              onClick={() => setCrossBorder(!crossBorder)}
+              className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${crossBorder ? 'bg-black justify-end' : 'bg-gray-300 justify-start'}`}
             >
-              <div className={`w-4 h-4 bg-white rounded-full shadow-xs transform transition-transform duration-300 ${crossBorder ? 'translate-x-5' : 'translate-x-0'}`} />
+              <div className="bg-white w-4 h-4 rounded-full shadow-md" />
             </button>
           </div>
+        </div>
 
-          {/* ── Product Image & Video Upload / Editor Node Module ── */}
-          <div className="space-y-3 border-t border-slate-100 pt-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Product Images & Videos</h3>
-              <span className="text-[10px] text-slate-400">
-                {productImages.length}/{MAX_FILES} files · Primary:{' '}
-                <span className="font-bold text-slate-600">
-                  {productImages[primaryImageIdx]?.name ?? 'none'}
-                </span>
-              </span>
-            </div>
-
-            {/* Drag and Drop Zone Block — Fix #2: images + videos, Fix #4: 5 file / 3MB copy */}
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); handleImageFiles(e.dataTransfer.files); }}
-              onClick={() => imageInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 py-8 cursor-pointer transition-colors ${
-                dragOver ? 'border-orange-400 bg-orange-50' : 'border-slate-200 hover:border-orange-300 hover:bg-slate-50'
-              }`}
-            >
-              <input
-                ref={imageInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
-                onChange={(e) => { handleImageFiles(e.target.files); e.target.value = ''; }}
-              />
-              <UploadCloud className="w-8 h-8 text-slate-400" />
-              <p className="text-xs font-semibold text-slate-500">Drop images or videos here or <span className="text-orange-600">browse</span></p>
-              <p className="text-[10px] text-slate-400">Images &amp; Videos — up to 3 MB each</p>
-            </div>
-
-            {/* Thumbnail Previews List */}
-            {productImages.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
-                {productImages.map((item, i) => (
-                  <div
-                    key={i} onClick={() => setActiveImageIdx(i)}
-                    className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 cursor-pointer transition-all group bg-slate-900 ${
-                      i === activeImageIdx ? 'border-orange-500' : 'border-slate-200 hover:border-slate-400'
-                    }`}
-                  >
-                    {item.type === 'video' ? (
-                      <>
-                        <video src={item.url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <Film className="w-5 h-5 text-white drop-shadow" />
-                        </div>
-                      </>
-                    ) : (
-                      <img src={item.editedUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                    )}
-                    {i === primaryImageIdx && (
-                      <div className="absolute bottom-1 left-1 bg-black/60 p-0.5 rounded-full">
-                        <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); removeProductImage(i); }}
-                      className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
+        {/* 2. Tags & SEO Keywords Section (NEW) */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 border-b pb-2 flex items-center gap-2">
+            <Tag size={14} /> TAGS & SEO KEYWORDS
+          </label>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Interactive Product Tags */}
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">
+                Product Tags <span className="text-gray-400">(Type tag & press Enter or Comma)</span>
+              </label>
+              <div className="border border-gray-300 rounded-lg p-2 focus-within:ring-1 focus-within:ring-black flex flex-wrap gap-2 items-center bg-white min-h-[42px]">
+                {tags.map((tag, idx) => (
+                  <span key={idx} className="bg-orange-100 text-orange-700 text-xs px-2.5 py-1 rounded-md flex items-center gap-1 font-medium">
+                    #{tag}
+                    <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-600">
+                      <X size={12} />
                     </button>
-                  </div>
+                  </span>
                 ))}
+                <input
+                  type="text"
+                  placeholder={tags.length === 0 ? "Add tag..." : ""}
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  className="flex-1 min-w-[100px] outline-none text-sm bg-transparent"
+                />
               </div>
-            )}
-
-            {/* Media Studio Context Layer */}
-            {activeMedia && (
-              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white animate-fade-in">
-                {activeIsVideo ? (
-                  /* Fix #2: videos get plain playback, no canvas editor */
-                  <div className="p-4 space-y-3">
-                    <div className="bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center" style={{ maxHeight: 400 }}>
-                      <video src={activeMedia.url} controls className="max-h-[400px] w-full" />
-                    </div>
-                    <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
-                      <Film className="w-3.5 h-3.5" /> Video playback only — cropping and filters apply to images.
-                    </p>
-                    <div className="flex justify-end">
-                      <button type="button" onClick={() => setPrimaryImageIdx(activeImageIdx)} className="text-[11px] font-bold border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                        <Star className="w-3.5 h-3.5" /> Set primary
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Fix #1: canvas + sliders side by side on a grid, canvas capped at max-h-[400px] */
-                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-0">
-                    <div className="relative bg-slate-900 flex items-center justify-center" style={{ maxHeight: 400, minHeight: 260 }}>
-                      <div className="relative w-full" style={{ maxHeight: 400, aspectRatio: '4/3' }}>
-                        <canvas
-                          ref={editorCanvasRef} className="w-full h-full block"
-                          style={{ maxHeight: 400, cursor: cropMode ? 'crosshair' : 'grab' }}
-                          onMouseDown={handleCanvasMouseDown}
-                          onMouseMove={handleCanvasMouseMove}
-                          onMouseUp={handleCanvasMouseUp}
-                          onMouseLeave={handleCanvasMouseUp}
-                          onWheel={handleCanvasWheel}
-                        />
-                        <canvas
-                          ref={cropOverlayRef}
-                          className="absolute inset-0 w-full h-full"
-                          style={{ cursor: cropMode ? 'crosshair' : 'default', pointerEvents: cropMode ? 'auto' : 'none' }}
-                          onMouseDown={handleCropMouseDown}
-                          onMouseMove={handleCropMouseMove}
-                          onMouseUp={handleCropMouseUp}
-                          onMouseLeave={handleCropMouseUp}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-                      {cropMode ? (
-                        <div className="space-y-3">
-                          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                            Drag directly on the image to draw a crop box, then apply it.
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={applyCrop} className="text-[11px] font-bold bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-800 flex items-center gap-1.5">
-                              <Scissors className="w-3.5 h-3.5" /> Apply Crop
-                            </button>
-                            <button type="button" onClick={cancelCrop} className="text-[11px] font-bold border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                              <X className="w-3.5 h-3.5" /> Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {[
-                            { label: 'Zoom',       key: 'zoom',    min: 10,  max: 300, unit: '%' },
-                            { label: 'Rotate',     key: 'rotate',  min: -180, max: 180, unit: '°' },
-                            { label: 'Brightness', key: 'bright',  min: 0,   max: 200, unit: '%' },
-                            { label: 'Contrast',   key: 'contrast', min: 0,   max: 200, unit: '%' },
-                            { label: 'Saturation', key: 'sat',      min: 0,   max: 200, unit: '%' },
-                          ].map(({ label, key, min, max, unit }) => (
-                            <div key={key} className="flex items-center gap-3">
-                              <span className="text-[11px] font-semibold text-slate-400 w-16 flex-shrink-0">{label}</span>
-                              <input
-                                type="range" min={min} max={max} step={1}
-                                value={editorState[key]}
-                                onChange={(e) => updateEditorState(key, Number(e.target.value))}
-                                className="flex-1 accent-orange-500"
-                              />
-                              <span className="text-[11px] font-bold text-slate-600 w-10 text-right">
-                                {Math.round(editorState[key])}{unit}
-                              </span>
-                            </div>
-                          ))}
-
-                          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
-                            <button type="button" onClick={flipH} className="text-[11px] font-bold border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                              <FlipHorizontal className="w-3.5 h-3.5" /> Flip H
-                            </button>
-                            <button type="button" onClick={flipV} className="text-[11px] font-bold border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                              <FlipVertical className="w-3.5 h-3.5" /> Flip V
-                            </button>
-                            <button type="button" onClick={toggleCrop} className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5">
-                              <Crop className="w-3.5 h-3.5" /> Crop
-                            </button>
-                            <button type="button" onClick={resetEditor} className="text-[11px] font-bold border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                              <RotateCcw className="w-3.5 h-3.5" /> Reset
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <button type="button" onClick={() => setPrimaryImageIdx(activeImageIdx)} className="text-[11px] font-bold border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                              <Star className="w-3.5 h-3.5" /> Set primary
-                            </button>
-                            <button type="button" onClick={applyEdits} className="text-[11px] font-bold bg-slate-900 text-white px-4 py-1.5 rounded-lg hover:bg-slate-800 flex items-center gap-1.5 ml-auto">
-                              <Check className="w-3.5 h-3.5" /> Apply
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Sub-table Variation Management Layers Grid */}
-          <div className="space-y-2 border-t border-slate-100 pt-5">
-            <div className="flex justify-between items-center">
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Product Variant Matrix Configurations</h3>
-              <button
-                type="button" onClick={handleAddVariantRow}
-                className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" /> Append Variant Line
-              </button>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold">
-                    <th className="p-3">Dimensions / Vol</th>
-                    <th className="p-3">Palette / Hue</th>
-                    <th className="p-3">Assigned SKU Label</th>
-                    <th className="p-3">Initial Stock</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {variants.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-5 text-center text-slate-400">No variant configurations added to processing array yet.</td>
-                    </tr>
-                  ) : (
-                    variants.map((v) => (
-                      <tr key={v.rowId} className="hover:bg-slate-50/30">
-                        <td className="p-2">
-                          <input
-                            type="text" required value={v.size} placeholder="e.g. 50ml"
-                            onChange={(e) => handleUpdateVariantField(v.rowId, 'size', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text" required value={v.color} placeholder="e.g. Rose Gold"
-                            onChange={(e) => handleUpdateVariantField(v.rowId, 'color', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text" required value={v.sku}
-                            onChange={(e) => handleUpdateVariantField(v.rowId, 'sku', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono focus:ring-1 focus:ring-orange-500 outline-none"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="number" min="0" required value={v.stock}
-                            onChange={(e) => handleUpdateVariantField(v.rowId, 'stock', e.target.value)}
-                            className="w-20 border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
-                          />
-                        </td>
-                        <td className="p-2 text-right">
-                          <button
-                            type="button" onClick={() => handleRemoveVariantRow(v.rowId)}
-                            className="text-slate-400 hover:text-red-500 p-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+            {/* SEO Meta Keywords */}
+            <div>
+              <label className="block text-xs text-gray-600 mb-1 flex items-center gap-1">
+                <Search size={12} /> Search Engine Meta Keywords
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. anti-aging, serum, retinol, face glow"
+                value={metaKeywords}
+                onChange={(e) => setMetaKeywords(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Pricing & Inventory */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 border-b pb-2">
+            PRICING & INVENTORY MANAGEMENT
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Base Price ($)</label>
+              <input
+                type="number"
+                placeholder="0.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Compare Price ($)</label>
+              <input
+                type="number"
+                placeholder="0.00"
+                value={comparePrice}
+                onChange={(e) => setComparePrice(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">SKU Code</label>
+              <input
+                type="text"
+                placeholder="PROD-001"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Available Stock</label>
+              <input
+                type="number"
+                placeholder="100"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Weight & Shipping Dimensions */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 border-b pb-2 flex items-center gap-2">
+            <Scale size={14} /> WEIGHT & SHIPPING DIMENSIONS
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Item Weight</label>
+              <div className="flex">
+                <input
+                  type="number"
+                  placeholder="0.5"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  className="w-full border border-r-0 border-gray-300 rounded-l-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+                />
+                <select
+                  value={weightUnit}
+                  onChange={(e) => setWeightUnit(e.target.value)}
+                  className="border border-gray-300 rounded-r-lg px-2 bg-gray-50 text-xs focus:outline-none"
+                >
+                  <option value="kg">kg</option>
+                  <option value="g">g</option>
+                  <option value="lb">lb</option>
+                  <option value="oz">oz</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Length (cm)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={dimLength}
+                onChange={(e) => setDimLength(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Width (cm)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={dimWidth}
+                onChange={(e) => setDimWidth(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Height (cm)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={dimHeight}
+                onChange={(e) => setDimHeight(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Media & Photo Editing Suite */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              PRODUCT IMAGES & VIDEOS
+            </label>
+            <span className="text-xs text-gray-400">
+              US Files - Primary: {images[primaryIndex]?.file?.name || 'None'}
+            </span>
+          </div>
+
+          <label className="border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 transition">
+            <UploadCloud className="w-8 h-8 text-orange-500 mb-2" />
+            <p className="text-sm font-medium text-gray-700">
+              Drop images or videos here or <span className="text-orange-600 underline">browse</span>
+            </p>
+            <span className="text-xs text-gray-400 mt-1">Images & Videos - up to 5 MB each</span>
+            <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
+          </label>
+
+          {images.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pt-2">
+              {images.map((img, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setSelectedIndex(idx)}
+                  className={`relative w-14 h-14 rounded-lg border-2 cursor-pointer overflow-hidden flex-shrink-0 ${selectedIndex === idx ? 'border-orange-500' : 'border-gray-200'}`}
+                >
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5"
+                  >
+                    <X size={10} />
+                  </button>
+                  {primaryIndex === idx && (
+                    <span className="absolute bottom-0 inset-x-0 bg-orange-500 text-[8px] text-white text-center font-bold">
+                      PRIMARY
+                    </span>
                   )}
-                </tbody>
-              </table>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {images.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-900 rounded-xl p-4 text-white mt-4">
+              <div className="md:col-span-7 h-80 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center relative">
+                <img
+                  src={images[selectedIndex]?.url}
+                  alt="Preview"
+                  style={{
+                    filter: `brightness(${editSettings.brightness}%) contrast(${editSettings.contrast}%) saturate(${editSettings.saturation}%)`,
+                    transform: `scale(${editSettings.zoom / 100}) rotate(${editSettings.rotate}deg) scaleX(${editSettings.flipH ? -1 : 1}) scaleY(${editSettings.flipV ? -1 : 1})`,
+                    transition: 'transform 0.1s ease, filter 0.1s ease'
+                  }}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+
+              <div className="md:col-span-5 space-y-3 text-xs flex flex-col justify-between">
+                <div className="space-y-2">
+                  {[
+                    { label: 'Zoom', key: 'zoom', min: 50, max: 200, unit: '%' },
+                    { label: 'Rotate', key: 'rotate', min: 0, max: 360, unit: '°' },
+                    { label: 'Brightness', key: 'brightness', min: 0, max: 200, unit: '%' },
+                    { label: 'Contrast', key: 'contrast', min: 0, max: 200, unit: '%' },
+                    { label: 'Saturation', key: 'saturation', min: 0, max: 200, unit: '%' }
+                  ].map(({ label, key, min, max, unit }) => (
+                    <div key={key} className="flex items-center gap-3">
+                      <span className="w-20 text-gray-400">{label}</span>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        value={editSettings[key]}
+                        onChange={(e) => setEditSettings({ ...editSettings, [key]: Number(e.target.value) })}
+                        className="w-full accent-orange-500 h-1 bg-gray-700 rounded-lg cursor-pointer"
+                      />
+                      <span className="w-10 text-right font-mono">{editSettings[key]}{unit}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditSettings({ ...editSettings, flipH: !editSettings.flipH })}
+                    className="flex items-center justify-center gap-1 bg-slate-800 hover:bg-slate-700 py-1.5 rounded text-[10px]"
+                  >
+                    <FlipHorizontal size={12} /> Flip H
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditSettings({ ...editSettings, flipV: !editSettings.flipV })}
+                    className="flex items-center justify-center gap-1 bg-slate-800 hover:bg-slate-700 py-1.5 rounded text-[10px]"
+                  >
+                    <FlipVertical size={12} /> Flip V
+                  </button>
+                  <button type="button" className="flex items-center justify-center gap-1 bg-slate-800 hover:bg-slate-700 py-1.5 rounded text-[10px]">
+                    <Crop size={12} /> Crop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex items-center justify-center gap-1 bg-slate-800 hover:bg-slate-700 py-1.5 rounded text-[10px]"
+                  >
+                    <RotateCcw size={12} /> Reset
+                  </button>
+                </div>
+
+                <div className="flex gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryIndex(selectedIndex)}
+                    className="flex-1 border border-slate-700 hover:bg-slate-800 py-1.5 rounded flex items-center justify-center gap-1 text-[11px]"
+                  >
+                    <Star size={12} className={primaryIndex === selectedIndex ? 'fill-orange-500 text-orange-500' : ''} /> Set primary
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => alert('Edits Applied')}
+                    className="flex-1 bg-black text-white hover:bg-gray-900 py-1.5 rounded font-semibold flex items-center justify-center gap-1 text-[11px]"
+                  >
+                    <Check size={12} /> Apply
+                  </button>
+                </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* 6. Variant Matrix Table */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+          <div className="flex justify-between items-center">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              PRODUCT VARIANT MATRIX CONFIGURATIONS
+            </label>
+            <button
+              type="button"
+              onClick={addVariant}
+              className="text-orange-600 hover:text-orange-700 text-xs font-semibold flex items-center gap-1"
+            >
+              <Plus size={14} /> Append Variant Line
+            </button>
           </div>
 
-          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-            <button
-              type="button" onClick={handleResetProductForm}
-              className="px-4 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
-            >
-              Clear Changes
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all"
-            >
-              Commit & Publish Catalog Entry
-            </button>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-gray-50 text-gray-500 border-b">
+                <tr>
+                  <th className="p-3">Dimensions / Vol</th>
+                  <th className="p-3">Palette / Hue</th>
+                  <th className="p-3">Assigned SKU Label</th>
+                  <th className="p-3">Initial Stock</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {variants.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="p-6 text-center text-gray-400 italic">
+                      No variant configurations added to processing array yet.
+                    </td>
+                  </tr>
+                ) : (
+                  variants.map((v, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-2"><input type="text" className="w-full border rounded px-2 py-1" placeholder="e.g. 50ml" /></td>
+                      <td className="p-2"><input type="text" className="w-full border rounded px-2 py-1" placeholder="e.g. Red" /></td>
+                      <td className="p-2"><input type="text" className="w-full border rounded px-2 py-1" placeholder="SKU-001" /></td>
+                      <td className="p-2"><input type="number" className="w-full border rounded px-2 py-1" placeholder="100" /></td>
+                      <td className="p-2 text-right">
+                        <button type="button" onClick={() => setVariants(variants.filter((_, idx) => idx !== i))} className="text-red-500 p-1">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </form>
+        </div>
+
+        {/* Bottom Actions */}
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            onClick={() => {
+              setTitle(''); setDescription(''); setPrice(''); setComparePrice('');
+              setSku(''); setStock(''); setWeight(''); setDimLength(''); setDimWidth('');
+              setDimHeight(''); setTags([]); setMetaKeywords(''); setImages([]); setVariants([]);
+            }}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100"
+          >
+            Clear Changes
+          </button>
+          <button
+            type="button"
+            onClick={() => alert('Product Catalog Published Successfully!')}
+            className="px-5 py-2 bg-black text-white rounded-lg text-xs font-semibold hover:bg-gray-800"
+          >
+            Commit & Publish Catalog Entry
+          </button>
+        </div>
+
       </div>
     </div>
   );

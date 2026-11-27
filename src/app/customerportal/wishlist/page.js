@@ -1,16 +1,56 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
 import { FiTrash2, FiShoppingCart } from 'react-icons/fi';
 
 export default function WishlistPage() {
-  const [wishlist, setWishlist] = useState([
-    { id: 1, name: 'Charcoal Detox Mask', price: 15.99, image: 'https://via.placeholder.com/150', inStock: true },
-    { id: 2, name: 'Vitamin C Brightening Serum', price: 29.50, image: 'https://via.placeholder.com/150', inStock: false },
-  ]);
+  const router = useRouter();
+  const supabase = createClient();
+  const [wishlist, setWishlist] = useState([]);
 
-  const removeProduct = (id) => {
-    setWishlist(wishlist.filter(item => item.id !== id));
+  const fetchWishlist = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/signin/customer');
+      return;
+    }
+
+    const { data } = await supabase
+      .from('wishlist')
+      .select('id, product_id, products(id, name, price, image_url, in_stock)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (data) {
+      setWishlist(data.map((w) => ({
+        id: w.id,
+        productId: w.product_id,
+        name: w.products?.name,
+        price: w.products?.price,
+        image: w.products?.image_url,
+        inStock: w.products?.in_stock,
+      })));
+    }
+  }, [supabase, router]);
+
+  useEffect(() => {
+    fetchWishlist();
+  }, [fetchWishlist]);
+
+  const removeProduct = async (id) => {
+    setWishlist((prev) => prev.filter(item => item.id !== id));
+    const { error } = await supabase.from('wishlist').delete().eq('id', id);
+    if (error) fetchWishlist();
+  };
+
+  const addToCart = async (productId) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !productId) return;
+    await supabase
+      .from('cart_items')
+      .upsert({ user_id: user.id, product_id: productId, quantity: 1 }, { onConflict: 'user_id,product_id' });
   };
 
   return (
@@ -40,6 +80,7 @@ export default function WishlistPage() {
                 <p className="text-green-700 font-bold mt-1">${item.price}</p>
                 <button 
                   disabled={!item.inStock}
+                  onClick={() => addToCart(item.productId)}
                   className={`mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors ${
                     item.inStock ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   }`}

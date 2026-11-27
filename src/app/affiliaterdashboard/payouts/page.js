@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { 
   DollarSign, 
   Clock, 
@@ -12,88 +12,118 @@ import {
   ArrowUpRight,
   Send,
   Shield,
-  Building2,
-  Wallet
+  Loader2
 } from 'lucide-react';
+import { 
+  fetchAffiliateDashboardData, 
+  fetchPayoutHistory, 
+  requestPayout 
+} from '@/actions/affiliateActions';
 
 export default function PayoutsPage() {
+  const [loading, setLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
+
+  // Modal & Form States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [selectedMethod, setSelectedMethod] = useState('bank');
+  const [payoutDetails, setPayoutDetails] = useState('');
+  const [modalError, setModalError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Financial Stats
-  const availableBalance = 1850.00;
-  const pendingBalance = 412.80;
-  const totalWithdrawn = 6200.00;
+  // Financial Stats & History States
+  const [balances, setBalances] = useState({
+    availableBalance: 0,
+    pendingBalance: 0,
+    totalWithdrawn: 0
+  });
+  const [payoutHistory, setPayoutHistory] = useState([]);
 
-  // Payout History Data
-  const [payoutHistory, setPayoutHistory] = useState([
-    {
-      id: 'PAY-8821',
-      date: '2026-07-20',
-      method: 'Bank Transfer (Meezan Bank)',
-      amount: '$500.00',
-      status: 'Completed',
-    },
-    {
-      id: 'PAY-8750',
-      date: '2026-07-10',
-      method: 'PayPal (user@example.com)',
-      amount: '$1,200.00',
-      status: 'Completed',
-    },
-    {
-      id: 'PAY-8610',
-      date: '2026-06-28',
-      method: 'Wise Direct',
-      amount: '$450.00',
-      status: 'Pending',
-    },
-    {
-      id: 'PAY-8400',
-      date: '2026-06-12',
-      method: 'Bank Transfer (Meezan Bank)',
-      amount: '$800.00',
-      status: 'Completed',
-    },
-  ]);
+  // Load Data from Supabase
+  const loadPayoutData = async () => {
+    setLoading(true);
+    try {
+      const [dashData, historyData] = await Promise.all([
+        fetchAffiliateDashboardData('CURRENT_USER_ID'),
+        fetchPayoutHistory('CURRENT_USER_ID')
+      ]);
 
+      const history = historyData || [];
+      const totalPaid = history
+        .filter(p => p.status === 'COMPLETED' || p.status === 'APPROVED')
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+      if (dashData?.stats) {
+        setBalances({
+          availableBalance: dashData.stats.approvedBalance || 0,
+          pendingBalance: dashData.stats.pendingBalance || 0,
+          totalWithdrawn: totalPaid
+        });
+      }
+
+      setPayoutHistory(history);
+    } catch (err) {
+      console.error('Failed to load payout data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPayoutData();
+  }, []);
+
+  // Handle Withdrawal Request Submission
   const handleWithdrawSubmit = (e) => {
     e.preventDefault();
+    setModalError('');
     const amountNum = parseFloat(withdrawAmount);
 
     if (!amountNum || amountNum <= 0) {
-      alert('Please enter a valid withdrawal amount.');
+      setModalError('Please enter a valid withdrawal amount.');
       return;
     }
 
-    if (amountNum > availableBalance) {
-      alert('Entered amount exceeds your available balance.');
+    if (amountNum > balances.availableBalance) {
+      setModalError('Entered amount exceeds your available balance.');
       return;
     }
 
     if (amountNum < 50) {
-      alert('Minimum payout request threshold is $50.00');
+      setModalError('Minimum payout request threshold is $50.00.');
       return;
     }
 
-    // Add new pending withdrawal request
-    const newRequest = {
-      id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: new Date().toISOString().split('T')[0],
-      method: selectedMethod === 'bank' ? 'Bank Transfer' : selectedMethod === 'paypal' ? 'PayPal' : 'Wise Direct',
-      amount: `$${amountNum.toFixed(2)}`,
-      status: 'Pending',
-    };
+    if (!payoutDetails.trim()) {
+      setModalError('Please enter your account details for transfer.');
+      return;
+    }
 
-    setPayoutHistory([newRequest, ...payoutHistory]);
-    setIsModalOpen(false);
-    setWithdrawAmount('');
-    setSuccessMessage('Withdrawal request submitted successfully!');
-    
-    setTimeout(() => setSuccessMessage(''), 4000);
+    startTransition(async () => {
+      const res = await requestPayout('CURRENT_USER_ID', amountNum, selectedMethod, payoutDetails);
+
+      if (res.success) {
+        setIsModalOpen(false);
+        setWithdrawAmount('');
+        setPayoutDetails('');
+        setSuccessMessage('Withdrawal request submitted successfully!');
+        loadPayoutData(); // Refresh list & balances
+        setTimeout(() => setSuccessMessage(''), 4000);
+      } else {
+        setModalError(res.error || 'Failed to submit withdrawal request.');
+      }
+    });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+        <p className="text-xs text-slate-500 font-medium">Fetching financial records...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
@@ -108,8 +138,11 @@ export default function PayoutsPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto"
+          onClick={() => {
+            setModalError('');
+            setIsModalOpen(true);
+          }}
+          className="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto active:scale-95"
         >
           <Plus className="w-4 h-4" /> Request Payout
         </button>
@@ -140,7 +173,7 @@ export default function PayoutsPage() {
             </div>
           </div>
           <div>
-            <p className="text-3xl font-black text-slate-900">${availableBalance.toFixed(2)}</p>
+            <p className="text-3xl font-black text-slate-900">${balances.availableBalance.toFixed(2)}</p>
             <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1 font-medium">
               <Shield className="w-3.5 h-3.5 text-emerald-500" /> Ready for immediate payout request
             </p>
@@ -156,8 +189,8 @@ export default function PayoutsPage() {
             </div>
           </div>
           <div>
-            <p className="text-3xl font-black text-amber-600">${pendingBalance.toFixed(2)}</p>
-            <p className="text-[10px] text-slate-400 mt-2 font-medium">Under 7-day refund hold period</p>
+            <p className="text-3xl font-black text-amber-600">${balances.pendingBalance.toFixed(2)}</p>
+            <p className="text-[10px] text-slate-400 mt-2 font-medium">Under 14-day refund hold period</p>
           </div>
         </div>
 
@@ -170,7 +203,7 @@ export default function PayoutsPage() {
             </div>
           </div>
           <div>
-            <p className="text-3xl font-black text-slate-900">${totalWithdrawn.toFixed(2)}</p>
+            <p className="text-3xl font-black text-slate-900">${balances.totalWithdrawn.toFixed(2)}</p>
             <p className="text-[10px] text-slate-400 mt-2 font-medium">Cleared payouts to date</p>
           </div>
         </div>
@@ -198,27 +231,49 @@ export default function PayoutsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {payoutHistory.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-3.5 px-5 font-mono text-slate-900 font-bold">{item.id}</td>
-                  <td className="py-3.5 px-5 text-slate-500 font-medium">{item.date}</td>
-                  <td className="py-3.5 px-5 font-bold text-slate-800 flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-slate-400" /> {item.method}
-                  </td>
-                  <td className="py-3.5 px-5 font-black text-slate-900 text-sm">{item.amount}</td>
-                  <td className="py-3.5 px-5 text-right">
-                    {item.status === 'Completed' ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                        <Clock className="w-3 h-3 text-amber-600" /> Processing
-                      </span>
-                    )}
+              {payoutHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400 text-xs font-medium">
+                    No withdrawal history found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                payoutHistory.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">
+                      PAY-{item.id.slice(0, 8)}
+                    </td>
+                    <td className="py-3.5 px-5 text-slate-500 font-medium">
+                      {new Date(item.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit'
+                      })}
+                    </td>
+                    <td className="py-3.5 px-5 font-bold text-slate-800 flex items-center gap-2 capitalize">
+                      <CreditCard className="w-4 h-4 text-slate-400" /> {item.method || 'Bank Transfer'}
+                    </td>
+                    <td className="py-3.5 px-5 font-black text-slate-900 text-sm">
+                      ${Number(item.amount).toFixed(2)}
+                    </td>
+                    <td className="py-3.5 px-5 text-right">
+                      {item.status === 'COMPLETED' || item.status === 'APPROVED' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed
+                        </span>
+                      ) : item.status === 'REJECTED' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                          <X className="w-3 h-3 text-rose-600" /> Rejected
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                          <Clock className="w-3 h-3 text-amber-600" /> Pending
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -248,13 +303,21 @@ export default function PayoutsPage() {
               </button>
             </div>
 
+            {/* Error Banner */}
+            {modalError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
             {/* Form */}
             <form onSubmit={handleWithdrawSubmit} className="space-y-4">
               
               {/* Available Limit Display */}
               <div className="bg-slate-50 border border-slate-200/60 p-3 rounded-xl flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium">Available to Withdraw:</span>
-                <span className="font-black text-slate-900 text-sm">${availableBalance.toFixed(2)}</span>
+                <span className="font-black text-slate-900 text-sm">${balances.availableBalance.toFixed(2)}</span>
               </div>
 
               {/* Amount Input */}
@@ -280,9 +343,9 @@ export default function PayoutsPage() {
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'bank', label: 'Bank' },
+                    { id: 'bank', label: 'Bank Transfer' },
                     { id: 'paypal', label: 'PayPal' },
-                    { id: 'wise', label: 'Wise' },
+                    { id: 'crypto', label: 'Crypto (USDT)' },
                   ].map((m) => (
                     <button
                       key={m.id}
@@ -300,10 +363,25 @@ export default function PayoutsPage() {
                 </div>
               </div>
 
+              {/* Payment Account Details */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Account Details
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Enter Bank Account / IBAN / PayPal Email / Wallet Address"
+                  value={payoutDetails}
+                  onChange={(e) => setPayoutDetails(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-purple-600 focus:bg-white transition-all"
+                  required
+                />
+              </div>
+
               {/* Helper Note */}
               <div className="text-[10px] text-slate-400 flex items-start gap-1.5 pt-1">
                 <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span>Payouts are processed within 24 to 48 business hours to your registered default account details.</span>
+                <span>Payouts are verified by admins and processed within 24 to 48 hours.</span>
               </div>
 
               {/* Actions */}
@@ -317,8 +395,10 @@ export default function PayoutsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
+                  disabled={isPending}
+                  className="w-1/2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                 >
+                  {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Submit Request
                 </button>
               </div>
