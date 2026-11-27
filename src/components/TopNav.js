@@ -58,15 +58,15 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
 
   // --- Location State & Handlers ---
   const [location, setLocation] = useState({ 
-    city: '', 
+    city: 'Lahore', 
     country: 'Pakistan', 
     displayLabel: 'Pakistan',
-    lat: null,
-    lng: null
+    lat: 31.5204,
+    lng: 74.3587
   });
   const [isLocOpen, setIsLocOpen] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(15); // Map Zoom Level State
+  const [zoomLevel, setZoomLevel] = useState(14);
   const locModalRef = useRef(null);
 
   const navRef = useRef(null);
@@ -80,13 +80,16 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     const saved = localStorage.getItem('criticpick_user_location');
     if (saved) {
       try { 
-        setLocation(JSON.parse(saved)); 
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.lat && parsed.lng) {
+          setLocation(parsed);
+          return;
+        }
       } catch (e) { 
-        fetchIPLocation(); 
+        // Fall through to fetchIPLocation
       }
-    } else {
-      fetchIPLocation();
     }
+    fetchIPLocation();
   }, []);
 
   // Close location modal on click outside
@@ -100,50 +103,19 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Helper to extract detailed Area + City + Country from OpenStreetMap
-  const formatDetailedAddress = (address) => {
-    const area = 
-      address?.suburb || 
-      address?.neighbourhood || 
-      address?.quarter || 
-      address?.residential || 
-      address?.road || 
-      address?.district || 
-      '';
-
-    const city = 
-      address?.city || 
-      address?.town || 
-      address?.village || 
-      address?.municipality || 
-      address?.county || 
-      '';
-
-    const country = address?.country || '';
-
-    const shortLabel = [area, city].filter(Boolean).join(', ') || city || country;
-    const fullLabel = [area, city, country].filter(Boolean).join(', ');
-
-    return { area, city, country, shortLabel, fullLabel };
-  };
-
-  // IP Location Fetch (Includes Coordinates for Map Embed)
+  // IP Location Fetch (Uses CORS-friendly ipwho.is with safe fallback)
   const fetchIPLocation = async () => {
     try {
-      const res = await fetch('https://ipapi.co/json/');
+      const res = await fetch('https://ipwho.is/');
       const data = await res.json();
-      if (data && data.country_name) {
-        const city = data.city || '';
-        const region = data.region || '';
-        const country = data.country_name;
-
+      if (data && data.success) {
         const locData = {
-          area: region,
-          city: city,
-          country: country,
-          displayLabel: city ? `${city}, ${country}` : country,
-          lat: data.latitude || null,
-          lng: data.longitude || null,
+          area: data.region || '',
+          city: data.city || '',
+          country: data.country || 'Pakistan',
+          displayLabel: data.city ? `${data.city}, ${data.country}` : data.country,
+          lat: data.latitude || 31.5204,
+          lng: data.longitude || 74.3587,
         };
 
         setLocation(locData);
@@ -154,7 +126,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   };
 
-  // Precise GPS Location Handler (Area + City + Pinpoint Coordinates)
+  // Precise GPS Location Handler (BigDataCloud CORS-enabled Reverse Geocode)
   const handlePreciseLocation = () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
@@ -164,47 +136,63 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const { latitude, longitude } = pos.coords;
         try {
-          const { latitude, longitude } = pos.coords;
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
           );
           const data = await res.json();
 
-          if (data && data.address) {
-            const parsed = formatDetailedAddress(data.address);
+          const area = data.locality || '';
+          const city = data.city || data.principalSubdivision || '';
+          const country = data.countryName || 'Pakistan';
+          const shortLabel = [area, city].filter((v, i, a) => v && a.indexOf(v) === i).join(', ') || country;
 
-            const locData = {
-              area: parsed.area,
-              city: parsed.city,
-              country: parsed.country,
-              displayLabel: parsed.shortLabel,
-              lat: latitude,
-              lng: longitude,
-              isPrecise: true,
-            };
+          const locData = {
+            area,
+            city,
+            country,
+            displayLabel: shortLabel,
+            lat: latitude,
+            lng: longitude,
+            isPrecise: true,
+          };
 
-            setLocation(locData);
-            setZoomLevel(16); // Reset zoom to detailed street level on precise lock
-            localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
-            setIsLocOpen(false);
-          }
+          setLocation(locData);
+          setZoomLevel(15);
+          localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
+          setIsLocOpen(false);
         } catch (err) {
-          alert('Could not resolve GPS location.');
+          const locData = {
+            ...location,
+            lat: latitude,
+            lng: longitude,
+            displayLabel: `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+            isPrecise: true,
+          };
+          setLocation(locData);
+          setZoomLevel(15);
+          localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
+          setIsLocOpen(false);
         } finally {
           setLocLoading(false);
         }
       },
-      () => {
+      (error) => {
         setLocLoading(false);
-        alert('Location permission denied.');
-      }
+        if (error.code === error.PERMISSION_DENIED) {
+          alert('Location permission blocked. Please allow location access in your browser address bar.');
+        } else {
+          alert('Unable to detect GPS location. Please check if device location services are turned on.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
   // Zoom Handlers
-  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 1, 20));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 1, 1));
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 1, 18));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 1, 3));
 
   // Logout Handler Function
   async function handleLogout() {
@@ -315,10 +303,12 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   }
 
-  // Dynamic Map Embed URL incorporating live zoom state
-  const mapEmbedUrl = location.lat && location.lng
-    ? `https://maps.google.com/maps?q=${location.lat},${location.lng}&z=${zoomLevel}&output=embed`
-    : `https://maps.google.com/maps?q=${encodeURIComponent(location.displayLabel || location.country)}&z=${zoomLevel}&output=embed`;
+  // OpenStreetMap Interactive Embed URL (Never blocked in iframes)
+  const lat = location.lat || 31.5204;
+  const lng = location.lng || 74.3587;
+  const delta = 360 / Math.pow(2, zoomLevel);
+  const bbox = `${lng - delta},${lat - delta * 0.6},${lng + delta},${lat + delta * 0.6}`;
+  const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
 
   return (
     <nav
@@ -365,10 +355,10 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
               </button>
             </div>
 
-            {/* Live Interactive Google Map with Zoom Controls */}
+            {/* Live Interactive Map with Zoom Controls */}
             <div className="relative w-full h-36 rounded-lg overflow-hidden mb-3 border border-gray-200 bg-gray-100 shadow-inner">
               <iframe
-                title="Live Google Map"
+                title="Live Map"
                 src={mapEmbedUrl}
                 width="100%"
                 height="100%"
