@@ -9,14 +9,15 @@ import {
   BsGeoAlt, 
   BsChevronDown, 
   BsChevronRight, 
-  BsMap, 
   BsX, 
   BsBoxArrowRight, 
-  BsPerson 
+  BsPerson,
+  BsPlusLg,
+  BsDashLg
 } from 'react-icons/bs';
 
 import { createClient } from '@/lib/supabase/client';
-import { useCart } from '@/context/CartContext'; // Path updated for consistency
+import { useCart } from '@/context/CartContext';
 
 const CATEGORIES = [
   'Arts & Crafts',
@@ -52,14 +53,158 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
   const [showSignInPopup, setShowSignInPopup] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
-  // Hydration state check (Prevents Next.js SSR mismatch)
+  // Hydration state check
   const [mounted, setMounted] = useState(false);
+
+  // --- Location State & Handlers ---
+  const [location, setLocation] = useState({ 
+    city: '', 
+    country: 'Pakistan', 
+    displayLabel: 'Pakistan',
+    lat: null,
+    lng: null
+  });
+  const [isLocOpen, setIsLocOpen] = useState(false);
+  const [locLoading, setLocLoading] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(15); // Map Zoom Level State
+  const locModalRef = useRef(null);
+
+  const navRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const navRef = useRef(null);
+  // Auto-detect location on load / check localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('criticpick_user_location');
+    if (saved) {
+      try { 
+        setLocation(JSON.parse(saved)); 
+      } catch (e) { 
+        fetchIPLocation(); 
+      }
+    } else {
+      fetchIPLocation();
+    }
+  }, []);
+
+  // Close location modal on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (locModalRef.current && !locModalRef.current.contains(e.target)) {
+        setIsLocOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Helper to extract detailed Area + City + Country from OpenStreetMap
+  const formatDetailedAddress = (address) => {
+    const area = 
+      address?.suburb || 
+      address?.neighbourhood || 
+      address?.quarter || 
+      address?.residential || 
+      address?.road || 
+      address?.district || 
+      '';
+
+    const city = 
+      address?.city || 
+      address?.town || 
+      address?.village || 
+      address?.municipality || 
+      address?.county || 
+      '';
+
+    const country = address?.country || '';
+
+    const shortLabel = [area, city].filter(Boolean).join(', ') || city || country;
+    const fullLabel = [area, city, country].filter(Boolean).join(', ');
+
+    return { area, city, country, shortLabel, fullLabel };
+  };
+
+  // IP Location Fetch (Includes Coordinates for Map Embed)
+  const fetchIPLocation = async () => {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+      if (data && data.country_name) {
+        const city = data.city || '';
+        const region = data.region || '';
+        const country = data.country_name;
+
+        const locData = {
+          area: region,
+          city: city,
+          country: country,
+          displayLabel: city ? `${city}, ${country}` : country,
+          lat: data.latitude || null,
+          lng: data.longitude || null,
+        };
+
+        setLocation(locData);
+        localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
+      }
+    } catch (err) {
+      console.error('IP Geolocation failed:', err);
+    }
+  };
+
+  // Precise GPS Location Handler (Area + City + Pinpoint Coordinates)
+  const handlePreciseLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setLocLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const data = await res.json();
+
+          if (data && data.address) {
+            const parsed = formatDetailedAddress(data.address);
+
+            const locData = {
+              area: parsed.area,
+              city: parsed.city,
+              country: parsed.country,
+              displayLabel: parsed.shortLabel,
+              lat: latitude,
+              lng: longitude,
+              isPrecise: true,
+            };
+
+            setLocation(locData);
+            setZoomLevel(16); // Reset zoom to detailed street level on precise lock
+            localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
+            setIsLocOpen(false);
+          }
+        } catch (err) {
+          alert('Could not resolve GPS location.');
+        } finally {
+          setLocLoading(false);
+        }
+      },
+      () => {
+        setLocLoading(false);
+        alert('Location permission denied.');
+      }
+    );
+  };
+
+  // Zoom Handlers
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 1, 20));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 1, 1));
 
   // Logout Handler Function
   async function handleLogout() {
@@ -110,6 +255,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     setOpenDropdown(null);
     setIsSubMenuOpen(false);
     setShowSignInPopup(false);
+    setIsLocOpen(false);
   };
 
   useEffect(() => {
@@ -169,6 +315,11 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   }
 
+  // Dynamic Map Embed URL incorporating live zoom state
+  const mapEmbedUrl = location.lat && location.lng
+    ? `https://maps.google.com/maps?q=${location.lat},${location.lng}&z=${zoomLevel}&output=embed`
+    : `https://maps.google.com/maps?q=${encodeURIComponent(location.displayLabel || location.country)}&z=${zoomLevel}&output=embed`;
+
   return (
     <nav
       ref={navRef}
@@ -183,31 +334,77 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
         <span className="text-lg sm:text-xl font-bold italic">Criticpick</span>
       </Link>
 
-      {/* Deliver-to location picker */}
-      <div className="hidden md:block relative">
+      {/* Live Location Widget */}
+      <div className="relative inline-block" ref={locModalRef}>
+        {/* Trigger Button */}
         <button
           type="button"
-          onClick={() => toggleDropdown('delivery')}
-          className="flex flex-col border border-transparent hover:border-white p-1 cursor-pointer text-left"
+          onClick={() => setIsLocOpen(!isLocOpen)}
+          className="flex items-center gap-1.5 border border-gray-400 rounded px-2.5 py-1 text-white hover:bg-white/10 transition"
         >
-          <span className="text-xs text-gray-400">Deliver to</span>
-          <span className="text-sm font-bold flex items-center">
-            <BsGeoAlt className="mr-1" /> Pakistan
-          </span>
+          <BsGeoAlt className="text-white text-sm shrink-0" />
+          <div className="flex flex-col text-left">
+            <span className="text-[10px] leading-tight text-gray-300">Deliver to</span>
+            <span className="text-xs font-bold leading-tight truncate max-w-[130px]">
+              {location.displayLabel || (location.city ? `${location.city}, ${location.country}` : location.country)}
+            </span>
+          </div>
         </button>
 
-        {openDropdown === 'delivery' && (
-          <div className="absolute top-full left-0 bg-white text-black p-4 rounded shadow-2xl w-64 z-[100] mt-1 border border-gray-200">
-            <p className="font-bold text-sm mb-2">Select your live location</p>
-            <div className="bg-gray-100 h-24 rounded mb-2 flex items-center justify-center text-gray-400">
-              <BsMap className="text-2xl" />
+        {/* Live Location Dropdown Modal */}
+        {isLocOpen && (
+          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 z-50 text-black">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-xs font-bold text-gray-800">Select your live location</h3>
+              <button 
+                type="button"
+                onClick={() => setIsLocOpen(false)} 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <BsX className="text-xl" />
+              </button>
             </div>
+
+            {/* Live Interactive Google Map with Zoom Controls */}
+            <div className="relative w-full h-36 rounded-lg overflow-hidden mb-3 border border-gray-200 bg-gray-100 shadow-inner">
+              <iframe
+                title="Live Google Map"
+                src={mapEmbedUrl}
+                width="100%"
+                height="100%"
+                className="w-full h-full border-0"
+                loading="lazy"
+              />
+
+              {/* Overlay Zoom Buttons (+ / -) */}
+              <div className="absolute bottom-2 right-2 flex flex-col gap-1 bg-white/95 backdrop-blur rounded shadow-md border border-gray-200 p-0.5 z-10">
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="w-6 h-6 flex items-center justify-center bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 font-bold rounded text-xs transition border-b border-gray-100"
+                  title="Zoom In"
+                >
+                  <BsPlusLg className="text-[10px]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="w-6 h-6 flex items-center justify-center bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 font-bold rounded text-xs transition"
+                  title="Zoom Out"
+                >
+                  <BsDashLg className="text-[10px]" />
+                </button>
+              </div>
+            </div>
+
+            {/* Purple Action Button */}
             <button
               type="button"
-              onClick={closeAll}
-              className="w-full bg-purple-600 hover:bg-purple-700 transition text-white py-1 rounded text-xs font-bold"
+              onClick={handlePreciseLocation}
+              disabled={locLoading}
+              className="w-full bg-[#8b5cf6] hover:bg-[#7c3aed] disabled:bg-purple-300 text-white font-semibold text-xs py-2 px-3 rounded transition"
             >
-              Use Precise Location
+              {locLoading ? 'Detecting Location...' : 'Use Precise Location'}
             </button>
           </div>
         )}
@@ -367,7 +564,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
                       onClick={closeAll}
                       className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 transition"
                     >
-                      <BsPerson className="text-sm" /> Profile & Orders
+                      <BsPerson className="text-sm" /> Profile &amp; Orders
                     </Link>
                     
                     <button
