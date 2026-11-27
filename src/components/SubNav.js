@@ -158,17 +158,17 @@ export default function SubNav() {
         })}
       </div>
 
-      {/* 3. Right-Side Urgency / Sale Countdown */}
+     {/* 3. Right-Side Urgency / Sale Countdown */}
       {timeLeft && (
         <Link
           href={SALE_LINK}
-          className="shrink-0 flex items-center gap-2 bg-purple-900 hover:bg-purple-800 border border-purple-500/60 px-2.5 py-1 rounded-sm transition-colors"
+          className="shrink-0 flex items-center gap-2 px-2 py-1 rounded-sm border border-transparent hover:border-white text-xs sm:text-sm transition-colors"
         >
-          <span className="flex items-center gap-1 bg-amber-400 text-slate-950 font-extrabold text-[10px] sm:text-xs px-1.5 py-0.5 rounded-sm uppercase">
-            <Flame className="w-3 h-3 fill-slate-950" />
-            {SALE_LABEL}
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+          <span className="text-gray-200 font-medium">
+            Flash Sale Ends in
           </span>
-          <span className="font-mono font-bold text-xs text-white">
+          <span className="font-mono font-bold text-white tracking-wide">
             {timeLeft}
           </span>
         </Link>
