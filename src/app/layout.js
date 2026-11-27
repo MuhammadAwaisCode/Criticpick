@@ -1,4 +1,3 @@
-import { Inter } from 'next/font/google';
 import './globals.css';
 
 // 1. Context Providers
@@ -9,13 +8,6 @@ import { UserProvider } from '@/context/UserContext';
 import TopNav from '@/components/TopNav';
 import SubNav from '@/components/SubNav';
 import FooterWrapper from '@/components/FooterWrapper';
-
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700', '900'],
-  variable: '--font-inter',
-  display: 'swap',
-});
 
 export const metadata = {
   metadataBase: new URL('https://www.critipick.com'),
@@ -54,7 +46,15 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" style={{ '--font-inter': "'Inter', sans-serif" }}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className="font-sans bg-hero-gradient min-h-screen flex flex-col overflow-x-hidden">
         <UserProvider>
           <CartProvider>
