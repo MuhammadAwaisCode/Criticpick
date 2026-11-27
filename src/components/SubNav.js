@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
-import { Menu, User, Server, Settings, Tag } from 'lucide-react';
+import { Menu, User, Server, Settings, Tag, Flame } from 'lucide-react';
 
 const BASE_NAV_LINKS = [
   { label: 'Home', href: '/', exact: true },
@@ -14,11 +14,17 @@ const BASE_NAV_LINKS = [
   { label: 'Contact', href: '/contact' },
 ];
 
+// Sirf sale end time aur text yahan set karein
+const SALE_END_TIME = '2026-12-01T23:59:59';
+const SALE_LABEL = 'FLASH SALE';
+const SALE_LINK = '/products';
+
 export default function SubNav() {
   const pathname = usePathname();
   const { user, role } = useUser();
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [timeLeft, setTimeLeft] = useState('');
   const infoRef = useRef(null);
 
   useEffect(() => {
@@ -29,6 +35,24 @@ export default function SubNav() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const diff = new Date(SALE_END_TIME) - new Date();
+      if (diff <= 0) {
+        setTimeLeft('00h : 00m : 00s');
+        return;
+      }
+      const h = String(Math.floor(diff / (1000 * 60 * 60))).padStart(2, '0');
+      const m = String(Math.floor((diff / 1000 / 60) % 60)).padStart(2, '0');
+      const s = String(Math.floor((diff / 1000) % 60)).padStart(2, '0');
+      setTimeLeft(`${h}h : ${m}m : ${s}s`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   function isLinkActive(link) {
@@ -133,6 +157,22 @@ export default function SubNav() {
           );
         })}
       </div>
+
+      {/* 3. Right-Side Urgency / Sale Countdown */}
+      {timeLeft && (
+        <Link
+          href={SALE_LINK}
+          className="shrink-0 flex items-center gap-2 bg-purple-900 hover:bg-purple-800 border border-purple-500/60 px-2.5 py-1 rounded-sm transition-colors"
+        >
+          <span className="flex items-center gap-1 bg-amber-400 text-slate-950 font-extrabold text-[10px] sm:text-xs px-1.5 py-0.5 rounded-sm uppercase">
+            <Flame className="w-3 h-3 fill-slate-950" />
+            {SALE_LABEL}
+          </span>
+          <span className="font-mono font-bold text-xs text-white">
+            {timeLeft}
+          </span>
+        </Link>
+      )}
 
     </div>
   );

@@ -52,7 +52,7 @@ const FOOTER_COLUMNS = [
       { label: 'Sell on Criticpick', href: '/signup/vendor' },
       { label: 'Become an Affiliate', href: '/signup/affiliater' },
       { label: 'Advertise Your Products', href: '/advertise' },
-      { label: 'Sea Panel', href: '/seapanel' },
+      
     ],
   },
   {
