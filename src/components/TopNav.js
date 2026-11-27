@@ -66,7 +66,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
   });
   const [isLocOpen, setIsLocOpen] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(14);
+  const [zoomLevel, setZoomLevel] = useState(15); // Map Zoom Level State
   const locModalRef = useRef(null);
 
   const navRef = useRef(null);
@@ -86,7 +86,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           return;
         }
       } catch (e) { 
-        // Fall through to fetchIPLocation
+        // fallback to fetchIPLocation
       }
     }
     fetchIPLocation();
@@ -103,17 +103,21 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // IP Location Fetch (Uses CORS-friendly ipwho.is with safe fallback)
+  // IP Location Fetch (Unblocked ipwho.is + ipapi fallback)
   const fetchIPLocation = async () => {
     try {
       const res = await fetch('https://ipwho.is/');
       const data = await res.json();
       if (data && data.success) {
+        const city = data.city || '';
+        const region = data.region || '';
+        const country = data.country || 'Pakistan';
+
         const locData = {
-          area: data.region || '',
-          city: data.city || '',
-          country: data.country || 'Pakistan',
-          displayLabel: data.city ? `${data.city}, ${data.country}` : data.country,
+          area: region,
+          city: city,
+          country: country,
+          displayLabel: city ? `${city}, ${country}` : country,
           lat: data.latitude || 31.5204,
           lng: data.longitude || 74.3587,
         };
@@ -126,7 +130,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   };
 
-  // Precise GPS Location Handler (BigDataCloud CORS-enabled Reverse Geocode)
+  // Precise GPS Location Handler (CORS-friendly BigDataCloud Reverse Geocode)
   const handlePreciseLocation = () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
@@ -159,7 +163,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
           };
 
           setLocation(locData);
-          setZoomLevel(15);
+          setZoomLevel(16);
           localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
           setIsLocOpen(false);
         } catch (err) {
@@ -171,20 +175,16 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
             isPrecise: true,
           };
           setLocation(locData);
-          setZoomLevel(15);
+          setZoomLevel(16);
           localStorage.setItem('criticpick_user_location', JSON.stringify(locData));
           setIsLocOpen(false);
         } finally {
           setLocLoading(false);
         }
       },
-      (error) => {
+      (err) => {
         setLocLoading(false);
-        if (error.code === error.PERMISSION_DENIED) {
-          alert('Location permission blocked. Please allow location access in your browser address bar.');
-        } else {
-          alert('Unable to detect GPS location. Please check if device location services are turned on.');
-        }
+        alert(err.code === 1 ? 'Location permission denied.' : 'Could not detect GPS location.');
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -303,7 +303,7 @@ export default function TopNav({ isAuthenticated = false, userName = '' }) {
     }
   }
 
-  // OpenStreetMap Interactive Embed URL (Never blocked in iframes)
+  // OpenStreetMap Embed URL (Never blocked in iframes, supports live zoom)
   const lat = location.lat || 31.5204;
   const lng = location.lng || 74.3587;
   const delta = 360 / Math.pow(2, zoomLevel);
